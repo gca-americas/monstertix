@@ -91,19 +91,50 @@
   .btn {
     display:block; width:100%; text-align:left; cursor:pointer; font:inherit;
     background:transparent; color:var(--text);
-    border:1px solid var(--line); border-radius:7px; padding:11px 13px;
-    margin-bottom:9px; transition:.12s;
+    border:1px solid var(--line); border-radius:6px; padding:7px 9px;
+    margin-bottom:0; transition:.12s;
   }
-  .btn:last-child { margin-bottom:0; }
   .btn:hover { border-color:var(--blue); background:color-mix(in srgb, var(--blue) 10%, transparent); }
-  .btn b { display:block; font-size:14.5px; letter-spacing:.4px; }
-  .btn span { display:block; color:var(--dim); font-size:12.5px; margin-top:3px; font-weight:400; }
+  .btn b { display:block; font-size:11.5px; letter-spacing:.3px; }
+  .btn span { display:block; color:var(--dim); font-size:10.5px; margin-top:2px; font-weight:400; line-height:1.35; }
   .btn.danger:hover { border-color:var(--red); background:color-mix(in srgb, var(--red) 10%, transparent); }
   .btn.danger b { color:var(--red); }
 
+  /* ---------- the control strip, under the timetable ---------- */
+  /* Lives inside the left column, so the grid gives it its width and the
+     stack's gap gives it its spacing. Sitting below the grid instead left a
+     tall gap under "Tickets bought" whenever the tour column was longer. */
+  .ctl-grid > .btn { min-width:0; }
+  .ctl-grid {
+    display:grid; grid-template-columns:repeat(auto-fit, minmax(190px, 1fr)); gap:8px;
+    align-items:stretch;
+  }
+  .ctl-grid > .btn { height:100%; }
+  /* the clock and SKIP THE WAIT share one row: both change how fast time moves */
+  .ctl-clock { display:flex; align-items:center; gap:10px; margin-bottom:8px; flex-wrap:wrap; }
+  .ctl-clock > label {
+    color:var(--dim); font-size:11px; text-transform:uppercase; letter-spacing:.8px;
+    font-weight:600; flex:none;
+  }
+  .ctl-clock .clock { flex:0 1 210px; }
+  .ctl-clock .btn { flex:1 1 220px; width:auto; }
+
+  /* RESET is not one of the experiments. It ends them, so it gets its own
+     colour and the full width of the panel, under everything else. */
+  .btn.reset {
+    grid-column:1 / -1; margin-top:8px; text-align:center;
+    border-color:var(--blue); border-width:2px;
+    background:color-mix(in srgb, var(--blue) 10%, transparent);
+  }
+  .btn.reset b { color:var(--blue); font-size:12.5px; }
+  .btn.reset:hover {
+    border-color:var(--blue);
+    background:color-mix(in srgb, var(--blue) 22%, transparent);
+  }
+
   .clock { display:flex; gap:8px; }
   .clock button {
-    flex:1; font:inherit; font-size:15px; cursor:pointer; padding:9px 0;
+    flex:1; font:inherit; font-size:12.5px; cursor:pointer; padding:6px 0;
     background:transparent; color:var(--text); border:1px solid var(--line); border-radius:7px;
   }
   .clock button:hover { border-color:var(--blue); }
@@ -120,8 +151,15 @@
 
   .poster {
     display:block; width:100%; height:auto; border-radius:10px;
-    margin:0 0 14px; border:1px solid var(--line);
+    margin:0 0 8px; border:1px solid var(--line);
   }
+  /* Deliberately small. It is a bit of atmosphere under the poster, not a
+     feature, and it must not compete with the timetable underneath it. */
+  .tune {
+    display:block; width:100%; height:30px; margin:0 0 14px;
+    filter:saturate(.7); opacity:.85;
+  }
+  .tune:hover { opacity:1; }
 
   table { width:100%; border-collapse:collapse; font-size:13.5px; }
   th { text-align:left; color:var(--dim); font-weight:600; font-size:11px;
@@ -183,70 +221,58 @@
       <div id="orders-list" style="margin-top:10px"></div>
     </section>
 
+      <section class="controls">
+      <h2>Workshop actions</h2>
+      <p class="blurb">Everything here changes the world the agent is working in. It cannot tell that you pressed anything.</p>
+
+      <div class="ctl-clock">
+        <label>Speed of the world</label>
+        <div class="clock" id="clock">
+          <button data-mult="1">1&times;</button>
+          <button data-mult="10">10&times;</button>
+          <button data-mult="60">60&times;</button>
+        </div>
+        <button class="btn" onclick="hit('/admin/advance-queue')">
+          <b>SKIP THE WAIT</b>
+        </button>
+      </div>
+
+      <div class="ctl-grid">
+        <button class="btn danger" onclick="sellout()">
+          <b>SELL THE GOOD SEATS</b>
+          <span>Section A goes to zero. The agent's saved seat map is now a lie.</span>
+        </button>
+        <button class="btn danger" onclick="sellout('C')">
+          <b>SELL THE CHEAP SEATS</b>
+          <span>Section C goes to zero. Only seats above a small budget are left.</span>
+        </button>
+        <button class="btn danger" onclick="hit('/admin/hang-once')">
+          <b>BREAK THE NEXT PURCHASE</b>
+          <span>Order is charged, then the reply fails. The runtime retries and buys again.</span>
+        </button>
+        <button class="btn reset" onclick="hit('/admin/reset')">
+          <b>RESET THE VENUE</b>
+          <span>Back to 8 shows, all seats available, clock at 1&times;. Your chat history is untouched.</span>
+        </button>
+      </div>
+      </section>
+
+  </div>
+
+  <!-- ============ RIGHT: what is for sale ============ -->
+  <div class="stack">
+
     <section>
       <h2>The tour</h2>
       <div id="artist" style="font-size:21px;font-weight:700;letter-spacing:.3px;
            margin:2px 0 3px">&nbsp;</div>
       <p class="blurb">The only artist this venue sells. Everything the agent can
         buy is below. Sell a section out and any plan it already made goes stale.</p>
-      <img class="poster" src="/poster.png" alt="The Midnight Signal">
+      <img class="poster" src="/themidnightsignal.png" alt="The Midnight Signal">
+      <audio class="tune" controls preload="none" src="/midnight_breach.mp3">
+        Your browser cannot play this.
+      </audio>
       <table id="inventory"></table>
-    </section>
-
-  </div>
-
-  <!-- ============ RIGHT: what you press ============ -->
-  <div class="stack">
-
-    <section>
-      <h2>Speed of the world</h2>
-      <p class="blurb">A 40-minute queue. At 1&times; it stays put, so use SKIP THE WAIT. The agent cannot tell.</p>
-      <div class="clock" id="clock">
-        <button data-mult="1">1&times;</button>
-        <button data-mult="10">10&times;</button>
-        <button data-mult="60">60&times;</button>
-      </div>
-    </section>
-
-    <section>
-      <h2>The pause</h2>
-      <button class="btn" onclick="hit('/admin/advance-queue')">
-        <b>SKIP THE WAIT</b>
-        <span>Sends whoever is queuing straight to the front, now.</span>
-      </button>
-    </section>
-
-    <section>
-      <h2>Break something</h2>
-      <button class="btn danger" onclick="sellout()">
-        <b>SELL THE GOOD SEATS</b>
-        <span>Section A goes to zero. The agent's saved seat map is now a lie.</span>
-      </button>
-      <button class="btn danger" onclick="sellout('C')">
-        <b>SELL THE CHEAP SEATS</b>
-        <span>Section C goes to zero. Only seats above a small budget are left.</span>
-      </button>
-      <button class="btn danger" onclick="hit('/admin/hang-once')">
-        <b>BREAK THE NEXT PURCHASE</b>
-        <span>Order is charged, then the reply fails. The runtime retries and buys again.</span>
-      </button>
-    </section>
-
-    <section>
-      <h2>The 3am run</h2>
-      <button class="btn" onclick="hit('/admin/drop-presale')">
-        <b>FIRE THE PRESALE</b>
-        <span>Wakes the agent with no human in the room.</span>
-      </button>
-    </section>
-
-    <section>
-      <h2>Start over</h2>
-      <p class="blurb">Wipes tickets, orders and inventory. Your chat history is untouched.</p>
-      <button class="btn" onclick="hit('/admin/reset')">
-        <b>RESET THE VENUE</b>
-        <span>Back to 8 shows, all seats available, clock at 1&times;.</span>
-      </button>
     </section>
 
   </div>

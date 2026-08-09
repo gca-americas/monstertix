@@ -94,16 +94,23 @@ HOLD_FOR_PEOPLE = 1_000
 
 # id, venue, city, date, weekday.  Mixed weekdays on purpose: the Tuesday shows
 # are what make "Sam bails on weeknights" worth remembering.
+# The weeknight show in each city comes FIRST, and is $10 cheaper in every
+# section. Both of those matter to the workshop: the cheaper, earlier, still
+# available show is the one an agent reaches for on price alone, and it is the
+# wrong answer for somebody whose friend never turns up on a weeknight.
 TOUR = [
+    ("ms-ams-02", "Ziggo Dome", "Amsterdam", "2026-11-10", "Tuesday"),
     ("ms-ams-01", "Ziggo Dome", "Amsterdam", "2026-11-14", "Saturday"),
-    ("ms-ams-02", "Ziggo Dome", "Amsterdam", "2026-11-17", "Tuesday"),
+    ("ms-nyc-02", "Barclays Center", "New York", "2026-11-17", "Tuesday"),
     ("ms-nyc-01", "Barclays Center", "New York", "2026-11-21", "Saturday"),
-    ("ms-nyc-02", "Barclays Center", "New York", "2026-11-24", "Tuesday"),
     ("ms-tyo-01", "Tokyo Garden Theater", "Tokyo", "2026-11-28", "Saturday"),
+    ("ms-mex-02", "Palacio de los Deportes", "Mexico City", "2026-12-01", "Tuesday"),
     ("ms-mex-01", "Palacio de los Deportes", "Mexico City", "2026-12-05", "Saturday"),
-    ("ms-mex-02", "Palacio de los Deportes", "Mexico City", "2026-12-08", "Tuesday"),
     ("ms-akl-01", "Spark Arena", "Auckland", "2026-12-12", "Saturday"),
 ]
+
+# How much cheaper a weeknight is, per seat, in every section.
+WEEKNIGHT_DISCOUNT = 10.0
 
 # section, tier, price, how many exist
 SECTIONS = [
@@ -203,12 +210,26 @@ def set_setting(key: str, value) -> None:
 
 def seed() -> None:
     """Idempotent — safe on every startup and after a reset."""
+    # Upsert, not INSERT OR IGNORE. A student who ran an earlier version of this
+    # workshop already has a venue.db, and IGNORE would leave them on the old
+    # dates and the old prices for ever — with no error, and nothing on screen to
+    # say why their agent is reasoning about numbers you cannot see.
+    #
+    # `sold` is deliberately left out of the UPDATE. Re-seeding must not un-sell
+    # anything; only the catalogue is corrected, never the state of play.
     for eid, venue_name, city, date, weekday in TOUR:
-        run("INSERT OR IGNORE INTO events VALUES (?,?,?,?,?)",
+        run("""INSERT INTO events VALUES (?,?,?,?,?)
+               ON CONFLICT(id) DO UPDATE SET
+                   venue=excluded.venue, city=excluded.city,
+                   date=excluded.date, weekday=excluded.weekday""",
             (eid, venue_name, city, date, weekday))
+        discount = WEEKNIGHT_DISCOUNT if weekday not in ("Saturday", "Sunday") else 0.0
         for section, tier, price, total in SECTIONS:
-            run("INSERT OR IGNORE INTO sections VALUES (?,?,?,?,?,0)",
-                (eid, section, tier, price, total))
+            run("""INSERT INTO sections VALUES (?,?,?,?,?,0)
+                   ON CONFLICT(event_id, section) DO UPDATE SET
+                       tier=excluded.tier, price=excluded.price,
+                       total=excluded.total""",
+                (eid, section, tier, price - discount, total))
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -585,9 +606,22 @@ def panel():
     return FileResponse(STATIC / "panel.html")
 
 
-@app.get("/poster.png")
+@app.get("/themidnightsignal.png")
 def poster():
-    """The band. There is no static mount here on purpose: this venue serves
-    exactly two files, and naming them both is shorter than configuring a
-    directory."""
+    """The band. Served under its own filename so the URL in panel.html and
+    the file on disk are the same string. There is no static mount here on
+    purpose: this venue serves a handful of files, and naming them is shorter
+    than configuring a directory."""
     return FileResponse(STATIC / "themidnightsignal.png")
+
+
+@app.get("/midnight_breach.mp3")
+def track():
+    """The band, audibly. Served under its own filename so the URL in
+    panel.html and the file on disk are the same string, with nothing to
+    reconcile. Nothing depends on it, so a missing file is a 404 and not a
+    broken panel: the <audio> element simply refuses to play."""
+    mp3 = STATIC / "midnight_breach.mp3"
+    if not mp3.exists():
+        raise HTTPException(status_code=404, detail="no track installed")
+    return FileResponse(mp3, media_type="audio/mpeg")

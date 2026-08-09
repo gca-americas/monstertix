@@ -23,7 +23,10 @@ TRIGGER_URL = os.environ.get(
     "TRIGGER_URL", f"http://127.0.0.1:{os.environ.get('TRIGGER_PORT', '8090')}"
 ).rstrip("/")
 
-DEFAULT_MESSAGE = "The presale just opened. Buy the tickets we discussed."
+DEFAULT_MESSAGE = (
+    "The presale just opened. Buy two tickets for The Midnight Signal in "
+    "Amsterdam on the Saturday, section A."
+)
 
 
 def log(message: str) -> None:

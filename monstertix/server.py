@@ -132,15 +132,6 @@ def chat_ui():
 @app.post("/wake")
 async def wake(payload: dict = Body(default={})):
     """Run the agent once. The work is in handlers.py, shared with step 10."""
-    # A person is on the other end of this one. Says so for the duration of
-    # this request only, so `agree_budget` asks instead of assuming a default.
-    # The Pub/Sub trigger route never runs this, which is the whole point.
-    try:
-        from concert import budget                                # noqa: PLC0415
-        budget.mark_attended()
-    except ImportError:                                           # pragma: no cover
-        pass                      # steps before the budget exists
-
     return await handlers.wake(
         runner, session_service, APP_NAME, USER_ID,
         message=payload.get("message") or "The presale just opened.",
