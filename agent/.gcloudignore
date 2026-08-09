@@ -1,0 +1,66 @@
+# What `gcloud run deploy --source agent` UPLOADS to Cloud Build.
+#
+# gcloud reads this file, not .dockerignore, when deciding what to send. Both
+# exist because they answer different questions, and the lists agree on purpose.
+#
+# Build context for the AGENT image (deploy-agent.sh runs `--source agent`).
+#
+# This one matters more than it looks. The Dockerfile here does:
+#
+#     COPY . .
+#
+# which is convenient and takes whatever happens to be sitting in this folder.
+# By the time you deploy, `adk web` has been running here for two hours and has
+# left rehearsal state behind. None of it should reach a container.
+
+# --- state adk web leaves behind -----------------------------------------
+# sessions.db is the one to think about. SESSION_SERVICE_URI points at Cloud SQL
+# in production, so a stale file would normally be ignored -- but it only takes
+# one deploy with the variable unset for the container to quietly use a database
+# full of somebody's rehearsal instead, and nothing about that looks broken.
+sessions.db
+sessions-*.db
+nightly.db
+*.db
+*.sqlite
+*.sqlite3
+artifacts/
+.adk/
+
+# memory/ is a local fallback. In production MEMORY_DIR is a gs:// bucket, so a
+# file baked in here is a second source of truth waiting to disagree with it.
+memory/
+
+# --- secrets -------------------------------------------------------------
+# If .env is ever copied in here it holds the Cloud SQL password. Image layers
+# are readable by anyone who can pull the image.
+.env
+.env.*
+*.pem
+*.key
+
+# --- python --------------------------------------------------------------
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.ruff_cache/
+.venv/
+
+# --- editors and OS ------------------------------------------------------
+.DS_Store
+*.swp
+*~
+.idea/
+.vscode/
+
+# --- assistant tooling ---------------------------------------------------
+.claude/
+.claude*/
+CLAUDE.md
+.antigravity/
+.antigravity*/
+.cursor/
+.aider*
+AGENTS.md
+.agent/

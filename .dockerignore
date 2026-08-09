@@ -1,0 +1,77 @@
+# Build context for the VENUE image (deploy-venue.sh runs `--source .` from here).
+#
+# The Dockerfile beside this file copies exactly two things:
+#
+#     COPY requirements.txt .
+#     COPY venue/ ./venue/
+#
+# Everything else in the repo is workshop material that has no business inside a
+# container. Without this file the context is ~195MB, almost all of it .venv,
+# and every deploy tars and uploads the lot before the build even starts.
+
+# --- the big one ---------------------------------------------------------
+.venv/
+venv/
+env/
+
+# --- workshop material, not application code -----------------------------
+agent/
+solutions/
+tests/
+docs/
+monstertix/
+*.md
+!requirements.txt
+
+# --- state the workshop generates ----------------------------------------
+# A rehearsal database or somebody's memory file baked into an image is a
+# confusing bug the first time it wins over the real one.
+*.db
+*.sqlite
+*.sqlite3
+artifacts/
+memory/
+.adk/
+
+# --- secrets -------------------------------------------------------------
+# .env holds the Cloud SQL password after step 10. An image layer is forever
+# and anyone who can pull the image can read it.
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# --- python --------------------------------------------------------------
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.ruff_cache/
+
+# --- vcs, editors, OS ----------------------------------------------------
+.git/
+.gitignore
+.github/
+.idea/
+.vscode/
+.DS_Store
+*.swp
+*~
+
+# --- assistant tooling ---------------------------------------------------
+.claude/
+.claude*/
+CLAUDE.md
+CLAUDE.local.md
+.antigravity/
+.antigravity*/
+.cursor/
+.aider*
+.continue/
+.windsurf/
+AGENTS.md
+.agent/
+
+# --- scripts that run on a laptop, never in the image --------------------
+*.sh
