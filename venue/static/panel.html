@@ -1,0 +1,413 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ticket Monster</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Roboto+Flex:opsz,wght@8..144,300..800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:#e9f3fb; --card:#ffffff; --line:#cfe0ee; --text:#131a2a; --dim:#6b7385;
+    --blue:#1b8fa0; --green:#5f9e12; --amber:#c2610f; --red:#d8401f;
+    --fur:#2ec4d6; --grape:#6b4fbb; --slime:#a6e22e;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg:#151a26; --card:#1c2333; --line:#28304a; --text:#eef2f7; --dim:#94a0bb;
+      --blue:#2ec4d6; --green:#a6e22e; --amber:#f2622e; --red:#ff6b52;
+    }
+  }
+  * { box-sizing:border-box; }
+  body {
+    margin:0; padding:18px; background:var(--bg); color:var(--text);
+    font:15px/1.5 "Google Sans Flex","Roboto Flex",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+  }
+
+  /* ---------- header ---------- */
+  header {
+    display:flex; align-items:center; gap:14px; flex-wrap:wrap; margin:-18px -18px 16px;
+    padding:13px 20px; color:#fff;
+    background:linear-gradient(135deg,var(--grape) 0%,#1b8fa0 55%,var(--fur) 100%);
+    box-shadow:0 2px 0 rgba(0,0,0,.16);
+  }
+  header .logo { width:40px; height:40px; flex:none; filter:drop-shadow(0 2px 3px rgba(0,0,0,.3)); }
+  h1 { font-size:20px; margin:0; letter-spacing:.6px; line-height:1.1; }
+  header .what { color:rgba(255,255,255,.85); font-size:12.5px; }
+
+  /* An LED ticker. Dot-matrix on near-black, the way a board above the doors
+     looks: the panel behind the lamps is always visible, the lit ones just sit
+     brighter on top of it. */
+  #status {
+    --led:#3ff08a;
+    position:relative; overflow:hidden;
+    display:flex; align-items:center; gap:16px;
+    background:#070a0f; border:1px solid #000; border-radius:10px;
+    padding:16px 20px; margin-bottom:18px;
+    box-shadow:inset 0 0 60px rgba(0,0,0,.85), 0 3px 8px rgba(0,0,0,.22);
+  }
+  #status::before {                      /* the unlit lamps */
+    content:""; position:absolute; inset:0; pointer-events:none; opacity:.5;
+    background-image:radial-gradient(circle, rgba(255,255,255,.09) 1px, transparent 1px);
+    background-size:4px 4px;
+  }
+  #status .dot {
+    width:12px; height:12px; border-radius:50%; flex:none; z-index:1;
+    background:var(--led); box-shadow:0 0 12px var(--led), 0 0 26px var(--led);
+  }
+  #status .txt { z-index:1; }
+  #status .line {
+    font-family:"Google Sans Flex","Roboto Flex",system-ui,sans-serif;
+    font-size:22px; font-weight:700; font-stretch:105%; letter-spacing:2.4px;
+    text-transform:uppercase; color:var(--led);
+    text-shadow:0 0 14px color-mix(in srgb,var(--led) 65%,transparent);
+  }
+  #status .sub {
+    font-family:"Google Sans Flex","Roboto Flex",system-ui,sans-serif;
+    font-size:13px; letter-spacing:.8px; margin-top:4px;
+    color:color-mix(in srgb,var(--led) 50%,#7d8391);
+  }
+  #status.busy  { --led:#5ce8b0; } #status.busy  .dot { animation:pulse 1.4s infinite; }
+  #status.ready { --led:#7dff5c; }
+  #status.bad   { --led:#ff5c3b; } #status.bad   .dot { animation:pulse 1s infinite; }
+  #status.armed { --led:#ffc03a; } #status.armed .dot { animation:pulse 1s infinite; }
+  @keyframes pulse { 50% { opacity:.35; } }
+
+  /* ---------- layout ---------- */
+  .cols { display:grid; grid-template-columns:1fr 1fr; gap:16px; align-items:start; }
+  @media (max-width:980px) { .cols { grid-template-columns:1fr; } }
+  .stack { display:flex; flex-direction:column; gap:16px; min-width:0; }
+
+  section { background:var(--card); border:1px solid var(--line); border-radius:8px; padding:15px; }
+  h2 {
+    font-size:11px; text-transform:uppercase; letter-spacing:1.3px; color:var(--dim);
+    margin:0 0 3px; font-weight:700;
+  }
+  h2 .act { color:var(--blue); }
+  .blurb { color:var(--dim); font-size:12.5px; margin:0 0 13px; }
+
+  /* ---------- buttons ---------- */
+  .btn {
+    display:block; width:100%; text-align:left; cursor:pointer; font:inherit;
+    background:transparent; color:var(--text);
+    border:1px solid var(--line); border-radius:7px; padding:11px 13px;
+    margin-bottom:9px; transition:.12s;
+  }
+  .btn:last-child { margin-bottom:0; }
+  .btn:hover { border-color:var(--blue); background:color-mix(in srgb, var(--blue) 10%, transparent); }
+  .btn b { display:block; font-size:14.5px; letter-spacing:.4px; }
+  .btn span { display:block; color:var(--dim); font-size:12.5px; margin-top:3px; font-weight:400; }
+  .btn.danger:hover { border-color:var(--red); background:color-mix(in srgb, var(--red) 10%, transparent); }
+  .btn.danger b { color:var(--red); }
+
+  .clock { display:flex; gap:8px; }
+  .clock button {
+    flex:1; font:inherit; font-size:15px; cursor:pointer; padding:9px 0;
+    background:transparent; color:var(--text); border:1px solid var(--line); border-radius:7px;
+  }
+  .clock button:hover { border-color:var(--blue); }
+  .clock button.on { background:var(--blue); border-color:var(--blue); color:#fff; font-weight:700; }
+
+  /* ---------- readouts ---------- */
+  .huge { font-size:44px; font-weight:700; line-height:1.1; }
+  .huge.bad { color:var(--red); animation:pulse 1s infinite; }
+  .huge.ok  { color:var(--green); }
+  .verdict { font-size:13px; margin-top:2px; }
+
+  .bar { height:9px; background:var(--bg); border:1px solid var(--line); border-radius:5px; overflow:hidden; margin:9px 0 5px; }
+  .bar > i { display:block; height:100%; background:var(--blue); transition:width .4s; }
+
+  .poster {
+    display:block; width:100%; height:auto; border-radius:10px;
+    margin:0 0 14px; border:1px solid var(--line);
+  }
+
+  table { width:100%; border-collapse:collapse; font-size:13.5px; }
+  th { text-align:left; color:var(--dim); font-weight:600; font-size:11px;
+       text-transform:uppercase; letter-spacing:.8px; padding-bottom:6px; }
+  td { padding:4px 0; border-top:1px solid var(--line); }
+  td.n, th.n { text-align:right; }
+  .gone { color:var(--red); font-weight:700; }
+
+  .feed { max-height:230px; overflow-y:auto; font-size:13px; }
+  .feed div { padding:4px 0; border-bottom:1px solid var(--line); display:flex; gap:10px; }
+  .feed time { color:var(--dim); flex:none; }
+  .k-purchase { color:var(--green); } .k-error { color:var(--red); }
+  .k-admin { color:var(--amber); }    .k-webhook { color:var(--blue); }
+  .empty { color:var(--dim); font-size:13px; }
+</style>
+</head>
+<body>
+
+<header>
+  <svg class="logo" viewBox="0 0 64 64" aria-hidden="true">
+    <path d="M14 12 L18 3 L23 13 Z M50 12 L46 3 L41 13 Z" fill="#a6e22e"/>
+    <circle cx="32" cy="36" r="23" fill="#2ec4d6" stroke="#0d5a66" stroke-width="2"/>
+    <path d="M9 36q5-6 9 0t9 0 9 0 9 0 9 0" fill="none" stroke="#1b8fa0" stroke-width="2.5"/>
+    <circle cx="32" cy="32" r="12" fill="#fff"/>
+    <circle cx="32" cy="32" r="6" fill="#131a2a"/>
+    <circle cx="35" cy="29" r="2" fill="#fff"/>
+    <path d="M24 49q8 5 16 0" fill="none" stroke="#0d5a66" stroke-width="2.5" stroke-linecap="round"/>
+  </svg>
+  <div>
+    <h1>TICKET MONSTER</h1>
+    <div class="what">a fake ticket seller you can break on purpose. The Midnight Signal, world tour</div>
+  </div>
+</header>
+
+<div id="status">
+  <div class="dot"></div>
+  <div class="txt">
+    <div class="line" id="status-line">connecting&hellip;</div>
+    <div class="sub"  id="status-sub"></div>
+  </div>
+</div>
+
+<div class="cols">
+
+  <!-- ============ LEFT: what is happening ============ -->
+  <div class="stack">
+
+    <section>
+      <h2>The queue</h2>
+      <p class="blurb">Where the agent is standing in line. It is not running while it waits.</p>
+      <div id="queue"></div>
+    </section>
+
+    <section>
+      <h2>Tickets bought</h2>
+      <p class="blurb">One booking should produce exactly one order.</p>
+      <div class="huge" id="orders-n">0</div>
+      <div class="verdict" id="orders-verdict"></div>
+      <div id="orders-list" style="margin-top:10px"></div>
+    </section>
+
+    <section>
+      <h2>The tour</h2>
+      <div id="artist" style="font-size:21px;font-weight:700;letter-spacing:.3px;
+           margin:2px 0 3px">&nbsp;</div>
+      <p class="blurb">The only artist this venue sells. Everything the agent can
+        buy is below. Sell a section out and any plan it already made goes stale.</p>
+      <img class="poster" src="/poster.png" alt="The Midnight Signal">
+      <table id="inventory"></table>
+    </section>
+
+  </div>
+
+  <!-- ============ RIGHT: what you press ============ -->
+  <div class="stack">
+
+    <section>
+      <h2>Speed of the world</h2>
+      <p class="blurb">A 40-minute queue. At 1&times; it stays put, so use SKIP THE WAIT. The agent cannot tell.</p>
+      <div class="clock" id="clock">
+        <button data-mult="1">1&times;</button>
+        <button data-mult="10">10&times;</button>
+        <button data-mult="60">60&times;</button>
+      </div>
+    </section>
+
+    <section>
+      <h2>The pause</h2>
+      <button class="btn" onclick="hit('/admin/advance-queue')">
+        <b>SKIP THE WAIT</b>
+        <span>Sends whoever is queuing straight to the front, now.</span>
+      </button>
+    </section>
+
+    <section>
+      <h2>Break something</h2>
+      <button class="btn danger" onclick="sellout()">
+        <b>SELL THE GOOD SEATS</b>
+        <span>Section A goes to zero. The agent's saved seat map is now a lie.</span>
+      </button>
+      <button class="btn danger" onclick="sellout('C')">
+        <b>SELL THE CHEAP SEATS</b>
+        <span>Section C goes to zero. Only seats above a small budget are left.</span>
+      </button>
+      <button class="btn danger" onclick="hit('/admin/hang-once')">
+        <b>BREAK THE NEXT PURCHASE</b>
+        <span>Order is charged, then the reply fails. The runtime retries and buys again.</span>
+      </button>
+    </section>
+
+    <section>
+      <h2>The 3am run</h2>
+      <button class="btn" onclick="hit('/admin/drop-presale')">
+        <b>FIRE THE PRESALE</b>
+        <span>Wakes the agent with no human in the room.</span>
+      </button>
+    </section>
+
+    <section>
+      <h2>Start over</h2>
+      <p class="blurb">Wipes tickets, orders and inventory. Your chat history is untouched.</p>
+      <button class="btn" onclick="hit('/admin/reset')">
+        <b>RESET THE VENUE</b>
+        <span>Back to 8 shows, all seats available, clock at 1&times;.</span>
+      </button>
+    </section>
+
+  </div>
+</div>
+
+<section style="margin-top:16px">
+  <h2>What the agent is doing</h2>
+  <p class="blurb">Newest first. Something moving here means something is happening.</p>
+  <div class="feed" id="feed"></div>
+</section>
+
+<script>
+const $ = id => document.getElementById(id);
+const QUEUE_START = 14203;
+let S = {};
+
+async function hit(path, body) {
+  await fetch(path, {method:'POST', headers:{'Content-Type':'application/json'},
+                     body: JSON.stringify(body || {})});
+  refresh();
+}
+function sellout(section) {
+  const first = (S.inventory || [])[0];
+  hit('/admin/sellout', {event_id: first ? first.event_id : 'ms-ams-01', section: section || 'A'});
+}
+document.querySelectorAll('#clock button').forEach(b => {
+  b.onclick = () => hit('/admin/clock', {multiplier: +b.dataset.mult});
+});
+
+const n = x => x.toLocaleString();
+
+/* ---- the one-line answer to "what is going on right now" ---- */
+function setStatus(s) {
+  const waiting = (s.queue || []).filter(t => !t.ready);
+  const atFront = (s.queue || []).filter(t =>  t.ready);
+  let cls = '', line = 'Nothing happening yet', sub = 'Go talk to the agent at :8000';
+
+  // "Rigged" is a flag on top of whatever is happening, never a state of its
+  // own. Ranking it above the queue is how you end up telling someone to ask
+  // the agent to buy while their agent is 13,000th in line and cannot.
+  const rigged = s.hang_armed ? ' The next purchase is rigged to fail.' : '';
+
+  if (s.order_count > 1) {
+    cls = 'bad';
+    line = `Bought ${s.order_count} times`;
+    sub  = 'The retry went through again. This is the bug an idempotency key fixes.';
+  } else if (waiting.length) {
+    const t = waiting[0];
+    cls = s.hang_armed ? 'armed' : 'busy';
+    line = `Agent is waiting in line, #${n(t.position)}`;
+    sub  = `${Math.round(t.real_seconds_remaining)}s left at ${t.clock_multiplier}×. `
+         + 'Safe to kill the agent. It will still be here. '
+         + 'SKIP THE WAIT sends it to the front.' + rigged;
+  } else if (atFront.length) {
+    cls = s.hang_armed ? 'armed' : 'ready';
+    line = 'Agent is at the front of the queue';
+    sub  = 'It can buy now. Go and ask it to.' + rigged;
+  } else if (s.hang_armed) {
+    cls = 'armed';
+    line = 'Next purchase is rigged to fail';
+    sub  = 'It will charge, then report an error. Get the agent to the front first.';
+  } else if (s.order_count === 1) {
+    cls = 'ready';
+    line = 'One order, exactly as intended';
+    sub  = (s.orders[0] ? `${s.orders[0].seats}× section ${s.orders[0].section} · ${s.orders[0].total}` : '');
+  }
+  $('status').className = cls;
+  $('status-line').textContent = line;
+  $('status-sub').textContent  = sub;
+}
+
+function renderQueue(q) {
+  if (!q.length) return '<div class="empty">Nobody is in line. Ask the agent to buy tickets.</div>';
+  return q.map(t => {
+    const pct = 100 * (1 - t.position / QUEUE_START);
+    return `<div style="margin-bottom:12px">
+      <div style="display:flex;justify-content:space-between;align-items:baseline">
+        <span style="font-size:22px;font-weight:700">
+          ${t.ready ? '<span style="color:var(--green)">AT THE FRONT</span>' : '#' + n(t.position)}
+        </span>
+        <span style="color:var(--dim);font-size:12.5px">${t.ticket}</span>
+      </div>
+      <div class="bar"><i style="width:${pct.toFixed(1)}%"></i></div>
+      <div style="color:var(--dim);font-size:12.5px">
+        ${t.ready ? 'it can buy now'
+                  : `~${Math.round(t.real_seconds_remaining)}s left  ·  ${n(Math.round(t.venue_seconds_remaining/60))} min of venue time`}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function renderOrders(s) {
+  const el = $('orders-n');
+  el.textContent = s.order_count;
+  el.className = 'huge' + (s.order_count > 1 ? ' bad' : (s.order_count === 1 ? ' ok' : ''));
+  $('orders-verdict').innerHTML =
+      s.order_count === 0 ? '<span style="color:var(--dim)">nothing bought yet</span>'
+    : s.order_count === 1 ? '<span style="color:var(--green)">correct, one booking and one order</span>'
+    : '<span style="color:var(--red)">too many, the same tickets were bought more than once</span>';
+
+  $('orders-list').innerHTML = s.orders.length
+    ? s.orders.map(o => `<div style="display:flex;justify-content:space-between;color:var(--dim);font-size:13px">
+         <span>${o.id}</span><span>${o.seats}× ${o.section} · ${o.total}</span></div>`).join('')
+    : '';
+}
+
+function renderInventory(inv) {
+  const byEvent = {};
+  inv.forEach(r => (byEvent[r.event_id] ||= []).push(r));
+  const head = '<tr><th>city</th><th>when</th>' +
+    '<th class="n">A · lower<br><span style="font-weight:400">$210</span></th>' +
+    '<th class="n">B · upper<br><span style="font-weight:400">$145</span></th>' +
+    '<th class="n">C · GA<br><span style="font-weight:400">$95</span></th></tr>';
+  const body = Object.entries(byEvent).map(([eid, secs]) => {
+    const m = secs[0];
+    const cell = letter => {
+      const s = secs.find(x => x.section === letter);
+      if (!s) return '<td class="n">-</td>';
+      return `<td class="n${s.available === 0 ? ' gone' : ''}">${
+        s.available === 0 ? 'SOLD OUT' : n(s.available)}</td>`;
+    };
+    // Weeknights are the ones Sam bails on, so make them visibly different.
+    const weeknight = !['Saturday', 'Sunday', 'Friday'].includes(m.weekday);
+    const when = `${m.weekday.slice(0,3)} ${m.date.slice(8)} ${
+      ['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][+m.date.slice(5,7)]}`;
+    return `<tr title="${eid} · ${m.venue}">
+      <td>${m.city}</td>
+      <td style="color:${weeknight ? 'var(--amber)' : 'var(--dim)'}">${when}${
+        weeknight ? ' ·weeknight' : ''}</td>
+      ${cell('A')}${cell('B')}${cell('C')}</tr>`;
+  }).join('');
+  return head + body;
+}
+
+function renderFeed(events) {
+  if (!events.length) return '<div class="empty">Nothing yet.</div>';
+  return events.map(e => {
+    const t = new Date(e.ts * 1000).toLocaleTimeString();
+    return `<div><time>${t}</time><span class="k-${e.kind}">${e.message}</span></div>`;
+  }).join('');
+}
+
+async function refresh() {
+  try { S = await (await fetch('/admin/state')).json(); }
+  catch { $('status-line').textContent = 'Venue is not responding';
+          $('status-sub').textContent = 'Is python -m venue still running?';
+          $('status').className = 'bad'; return; }
+
+  document.querySelectorAll('#clock button')
+    .forEach(b => b.classList.toggle('on', +b.dataset.mult === S.clock_multiplier));
+
+  setStatus(S);
+  $('queue').innerHTML     = renderQueue(S.queue);
+  renderOrders(S);
+  $('inventory').innerHTML = renderInventory(S.inventory);
+  if (S.artist) $('artist').textContent = S.artist;
+  $('feed').innerHTML      = renderFeed(S.agent_events);
+}
+
+refresh();
+setInterval(refresh, 500);
+</script>
+</body>
+</html>

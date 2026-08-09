@@ -1,0 +1,59 @@
+# --- python -------------------------------------------------------------
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.ruff_cache/
+
+# --- secrets and machine-specific config ---------------------------------
+# .env holds a project id, a venue URL, and after step 10 a Cloud SQL password.
+# .env.example is the one that gets committed.
+.env
+*.pem
+*.key
+
+# --- state the workshop generates ----------------------------------------
+venue.db
+sessions.db
+sessions-*.db
+nightly.db
+*.sqlite
+*.sqlite3
+artifacts/
+
+# The seeded memory file IS committed — students need something to read on the
+# first run. Anything else in there is a rehearsal artefact.
+memory/*.md
+!memory/userx.md
+
+# adk web writes a per-agent session store here when no --session_service_uri
+# is given. Never commit one.
+.adk/
+
+# --- editors and OS ------------------------------------------------------
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*~
+
+# --- assistant tooling ---------------------------------------------------
+# Nothing from an AI coding assistant belongs in this repo: not its settings,
+# not its session logs, not its scratch files. This is a teaching repo that gets
+# handed to a room full of people, and the only thing that should travel with it
+# is the workshop.
+.claude/
+.claude*/
+CLAUDE.md
+CLAUDE.local.md
+.antigravity/
+.antigravity*/
+.cursor/
+.aider*
+.continue/
+.windsurf/
+.github/copilot-instructions.md
+AGENTS.md
+.agent/

@@ -1,0 +1,333 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MonsterTix — book with the agent</title>
+<style>
+  /* A ticket marketplace, if it were run by monsters. Original mascot and
+     wordmark: this ships in a workshop repo, so it borrows the layout language
+     of a ticket site without borrowing anybody's actual brand. */
+  :root {
+    --fur:#2ec4d6; --fur-dark:#1b8fa0; --slime:#a6e22e; --grape:#6b4fbb;
+    --ink:#131a2a; --paper:#f7f4ee; --line:#e2dcd1; --dim:#6b7385;
+    --warn:#f2622e;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --paper:#151a26; --ink:#eef2f7; --line:#28304a; --dim:#94a0bb; }
+  }
+  * { box-sizing:border-box; }
+  html, body { height:100%; }
+  body {
+    margin:0; background:var(--paper); color:var(--ink);
+    font:16px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    display:flex; flex-direction:column;
+  }
+
+  /* ---------- the marquee ---------- */
+  header {
+    background:linear-gradient(135deg,var(--grape) 0%,var(--fur-dark) 55%,var(--fur) 100%);
+    color:#fff; padding:14px 20px; display:flex; align-items:center; gap:14px;
+    box-shadow:0 2px 0 rgba(0,0,0,.16);
+  }
+  .logo { width:44px; height:44px; flex:none; filter:drop-shadow(0 2px 3px rgba(0,0,0,.3)); }
+  .brand b { font-size:21px; letter-spacing:.5px; display:block; line-height:1.1; }
+  .brand span { font-size:12px; opacity:.85; letter-spacing:1.6px; text-transform:uppercase; }
+  .who-am-i {
+    margin-left:auto; display:flex; align-items:center; gap:9px;
+    background:rgba(255,255,255,.14); border:1px solid rgba(255,255,255,.25);
+    border-radius:999px; padding:4px 14px 4px 4px;
+  }
+  .who-am-i .avatar {
+    width:26px; height:26px; border-radius:50%; background:var(--slime); color:#0d3b02;
+    display:grid; place-items:center; font-weight:800; font-size:13px;
+  }
+  .who-am-i .name { font-size:13.5px; font-weight:600; letter-spacing:.2px; }
+  .ghost {
+    font:inherit; font-size:13px; cursor:pointer; white-space:nowrap;
+    background:rgba(255,255,255,.14); color:#fff;
+    border:1px solid rgba(255,255,255,.3); border-radius:999px; padding:6px 13px;
+  }
+  .ghost:hover { background:rgba(255,255,255,.26); }
+  .ghost.danger { border-color:rgba(255,140,120,.65); color:#ffd9d1; }
+  .ghost.danger:hover { background:rgba(255,90,60,.35); border-color:#ff8c78; }
+
+  /* ---------- the are-you-sure ---------- */
+  .scrim {
+    position:fixed; inset:0; background:rgba(8,12,20,.62); display:none;
+    place-items:center; padding:20px; z-index:9;
+  }
+  .scrim.open { display:grid; }
+  .sheet {
+    background:var(--paper); color:var(--ink); border-radius:14px; padding:22px 24px;
+    max-width:460px; border-top:6px solid var(--warn);
+    box-shadow:0 18px 50px rgba(0,0,0,.4);
+  }
+  .sheet h2 { margin:0 0 4px; font-size:19px; }
+  .sheet .warn { color:var(--warn); font-weight:700; font-size:13px;
+                 letter-spacing:1.2px; text-transform:uppercase; }
+  .sheet ul { margin:12px 0 4px; padding-left:20px; font-size:14.5px; }
+  .sheet li { margin-bottom:5px; }
+  .sheet .where {
+    font:12.5px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace; color:var(--dim);
+    background:color-mix(in srgb,var(--paper) 70%,var(--line));
+    border-radius:8px; padding:9px 11px; margin:12px 0 4px; word-break:break-all;
+  }
+  .sheet .row2 { display:flex; gap:10px; justify-content:flex-end; margin-top:18px; }
+  .sheet button {
+    font:inherit; cursor:pointer; border-radius:10px; padding:9px 16px;
+    border:1px solid var(--line); background:transparent; color:inherit;
+  }
+  .sheet button.go { background:var(--warn); border-color:var(--warn); color:#fff; font-weight:600; }
+
+  .live { margin-left:0; font-size:12px; letter-spacing:1.2px; text-transform:uppercase;
+    background:rgba(255,255,255,.16); border:1px solid rgba(255,255,255,.3);
+    border-radius:999px; padding:5px 12px; display:flex; align-items:center; gap:7px;
+  }
+  .live i { width:8px; height:8px; border-radius:50%; background:var(--slime);
+            box-shadow:0 0 8px var(--slime); animation:blink 1.6s infinite; }
+  @keyframes blink { 50% { opacity:.25; } }
+
+  .strap {
+    width:min(760px,94%); margin:18px auto 2px; color:var(--dim); font-size:14px;
+  }
+
+  /* ---------- conversation ---------- */
+  main { flex:1; overflow-y:auto; padding:10px 0 20px; }
+  .thread { width:min(760px,94%); margin:0 auto; display:flex; flex-direction:column; gap:12px; }
+  .row { display:flex; gap:10px; align-items:flex-end; }
+  .row.me { flex-direction:row-reverse; }
+  .pip { width:30px; height:30px; flex:none; border-radius:50%; background:var(--grape);
+         display:grid; place-items:center; }
+  .row.me .pip { background:var(--slime); }
+  .bubble {
+    max-width:76%; padding:11px 15px; border-radius:16px; white-space:pre-wrap;
+    border:1px solid var(--line); background:color-mix(in srgb,var(--paper) 86%,#fff);
+  }
+  @media (prefers-color-scheme: dark) {
+    .bubble { background:color-mix(in srgb,var(--paper) 80%,#fff 6%); }
+  }
+  .row.me .bubble { background:var(--fur); color:#04252b; border-color:transparent; }
+  .bubble.ask { border-left:4px solid var(--warn); }
+  .bubble .label {
+    display:block; font-size:11px; letter-spacing:1.4px; text-transform:uppercase;
+    color:var(--warn); margin-bottom:4px; font-weight:700;
+  }
+  .tool {
+    align-self:center; font:12px/1 ui-monospace,SFMono-Regular,Menlo,monospace;
+    color:var(--dim); background:color-mix(in srgb,var(--paper) 70%,var(--line));
+    border-radius:999px; padding:5px 12px;
+  }
+  .typing span { display:inline-block; width:6px; height:6px; margin-right:3px;
+                 border-radius:50%; background:var(--dim); animation:bob 1s infinite; }
+  .typing span:nth-child(2){animation-delay:.15s} .typing span:nth-child(3){animation-delay:.3s}
+  @keyframes bob { 50% { transform:translateY(-4px); opacity:.4; } }
+
+  /* ---------- composer ---------- */
+  footer { border-top:1px solid var(--line); background:var(--paper); padding:12px 0 18px; }
+  .composer { width:min(760px,94%); margin:0 auto; display:flex; gap:10px; }
+  textarea {
+    flex:1; resize:none; font:inherit; color:inherit; padding:12px 14px;
+    background:color-mix(in srgb,var(--paper) 86%,#fff);
+    border:1px solid var(--line); border-radius:12px; min-height:48px; max-height:140px;
+  }
+  @media (prefers-color-scheme: dark) {
+    textarea { background:color-mix(in srgb,var(--paper) 80%,#fff 6%); }
+  }
+  textarea:focus { outline:2px solid var(--fur); outline-offset:-1px; }
+  button.send {
+    flex:none; width:52px; border:0; border-radius:12px; cursor:pointer;
+    background:var(--grape); color:#fff; font-size:19px;
+  }
+  button.send:hover { background:var(--fur-dark); }
+  button.send:disabled { opacity:.45; cursor:default; }
+</style>
+</head>
+<body>
+
+<header>
+  <!-- One eye, two horns, a lot of fur. Drawn here, not borrowed. -->
+  <svg class="logo" viewBox="0 0 64 64" aria-hidden="true">
+    <path d="M14 12 L18 3 L23 13 Z M50 12 L46 3 L41 13 Z" fill="#a6e22e"/>
+    <circle cx="32" cy="36" r="23" fill="#2ec4d6" stroke="#0d5a66" stroke-width="2"/>
+    <path d="M9 36q5-6 9 0t9 0 9 0 9 0 9 0" fill="none" stroke="#1b8fa0" stroke-width="2.5"/>
+    <circle cx="32" cy="32" r="12" fill="#fff"/>
+    <circle cx="32" cy="32" r="6" fill="#131a2a"/>
+    <circle cx="35" cy="29" r="2" fill="#fff"/>
+    <path d="M24 49q8 5 16 0" fill="none" stroke="#0d5a66" stroke-width="2.5" stroke-linecap="round"/>
+  </svg>
+  <div class="brand">
+    <b>MONSTERTIX</b>
+    <span>we scare up the good seats</span>
+  </div>
+  <div class="who-am-i" title="every booking, every memory and every budget belongs to this person">
+    <span class="avatar">C</span>
+    <span class="name">Userx</span>
+  </div>
+  <button class="ghost" id="newSession" title="Start a fresh conversation. Nothing is deleted.">
+    + New session
+  </button>
+  <button class="ghost danger" id="wipe" title="Delete every session and the memory file">
+    Reset memory
+  </button>
+  <div class="live"><i></i><span id="status">agent online</span></div>
+</header>
+
+<div class="strap">A ticket booking assistant.</div>
+
+<div class="scrim" id="scrim">
+  <div class="sheet">
+    <div class="warn">Dangerous · cannot be undone</div>
+    <h2>Wipe everything this agent knows?</h2>
+    <ul>
+      <li><b>Every session</b> — every conversation, every queue ticket it is holding, every agreed budget.</li>
+      <li><b>The memory file</b> — who comes with you, what you cannot stand, what you have paid before.</li>
+    </ul>
+    <p style="font-size:14.5px;margin:10px 0 0">
+      A run parked in a queue right now will be lost. There is no undo and no backup.
+    </p>
+    <div class="where" id="whereText">checking where state lives…</div>
+    <div class="row2">
+      <button id="cancel">Cancel</button>
+      <button class="go" id="confirm">Yes, wipe it</button>
+    </div>
+  </div>
+</div>
+
+<main><div class="thread" id="thread"></div></main>
+
+<footer>
+  <div class="composer">
+    <textarea id="box" rows="1" placeholder="Ask it to book something…"></textarea>
+    <button class="send" id="send" title="Send">➤</button>
+  </div>
+</footer>
+
+<script>
+// One session for this tab, until you ask for another.
+let SESSION = "web-" + Math.random().toString(36).slice(2, 9);
+const thread = document.getElementById("thread");
+const box = document.getElementById("box");
+const send = document.getElementById("send");
+
+function bubble(text, who, isAsk) {
+  const row = document.createElement("div");
+  row.className = "row" + (who === "me" ? " me" : "");
+  const pip = document.createElement("div");
+  pip.className = "pip";
+  pip.innerHTML = who === "me"
+    ? '<b style="color:#0d3b02;font-size:13px">C</b>'
+    : '<svg width="18" height="18" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="#fff"/><circle cx="12" cy="12" r="4.5" fill="#131a2a"/></svg>';
+  const b = document.createElement("div");
+  b.className = "bubble" + (isAsk ? " ask" : "");
+  if (isAsk) {
+    const l = document.createElement("span");
+    l.className = "label";
+    l.textContent = "needs your answer";
+    b.appendChild(l);
+  }
+  b.appendChild(document.createTextNode(text));
+  row.append(pip, b);
+  thread.appendChild(row);
+  thread.parentElement.scrollTop = thread.parentElement.scrollHeight;
+  return b;
+}
+
+function typing() {
+  const row = document.createElement("div");
+  row.className = "row";
+  row.innerHTML = '<div class="pip"></div><div class="bubble typing">'
+                + '<span></span><span></span><span></span></div>';
+  thread.appendChild(row);
+  thread.parentElement.scrollTop = thread.parentElement.scrollHeight;
+  return row;
+}
+
+async function ask(text) {
+  bubble(text, "me");
+  const wait = typing();
+  send.disabled = true;
+  document.getElementById("status").textContent = "thinking…";
+  try {
+    const r = await fetch("/wake", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message: text, session_id: SESSION }),
+    });
+    const data = await r.json();
+    wait.remove();
+    // The server hands back everything the agent said, plus whether the run
+    // parked on a question. A parked run is the whole point of this workshop,
+    // so it gets its own treatment rather than looking like an ordinary reply.
+    (data.said || []).forEach((line, i) => {
+      const last = i === (data.said.length - 1);
+      bubble(line, "agent", last && data.awaiting_input);
+    });
+    if (!data.said || !data.said.length) {
+      bubble("(the run finished without saying anything)", "agent");
+    }
+  } catch (e) {
+    wait.remove();
+    bubble("Could not reach the agent: " + e.message, "agent");
+  }
+  send.disabled = false;
+  document.getElementById("status").textContent = "agent online";
+  box.focus();
+}
+
+function submit() {
+  const text = box.value.trim();
+  if (!text) return;
+  box.value = "";
+  box.style.height = "auto";
+  ask(text);
+}
+send.onclick = submit;
+box.addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submit(); }
+});
+box.addEventListener("input", () => {
+  box.style.height = "auto";
+  box.style.height = Math.min(box.scrollHeight, 140) + "px";
+});
+
+// ---------- session + wipe ----------
+const scrim = document.getElementById("scrim");
+
+document.getElementById("newSession").onclick = async () => {
+  const r = await fetch("/session/new", { method: "POST" });
+  SESSION = (await r.json()).session_id;
+  thread.innerHTML = "";
+  bubble("New session. I have forgotten this conversation — including whatever "
+       + "budget we agreed — but I still know you from past bookings.", "agent");
+};
+
+document.getElementById("wipe").onclick = async () => {
+  const r = await fetch("/health");
+  const h = await r.json();
+  document.getElementById("whereText").textContent =
+    "sessions → " + h.sessions + "\nmemory  → " + h.memory;
+  scrim.classList.add("open");
+};
+document.getElementById("cancel").onclick = () => scrim.classList.remove("open");
+scrim.onclick = (e) => { if (e.target === scrim) scrim.classList.remove("open"); };
+
+document.getElementById("confirm").onclick = async () => {
+  scrim.classList.remove("open");
+  const r = await fetch("/admin/wipe", { method: "POST" });
+  const d = await r.json();
+  SESSION = d.session_id;
+  thread.innerHTML = "";
+  bubble("Wiped. " + d.sessions_deleted + " session(s) deleted"
+       + (d.memory_deleted.length ? " and " + d.memory_deleted.join(", ") + " removed"
+                                  : ", no memory file found")
+       + ". I do not know you any more.", "agent");
+};
+
+bubble("Hi Userx — I book concert tickets. I know what you have booked before, "
+     + "so tell me what you want and I'll take it from there, including the waiting.",
+     "agent");
+box.focus();
+</script>
+</body>
+</html>
