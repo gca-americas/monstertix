@@ -255,12 +255,31 @@ if [ "${CHECK:0:2}" = "OK" ]; then
   fi
 
 
+  # ── The venue, deployed now so the workshop starts with a world ──────────
+  #
+  # Every student gets their own. A shared one would mean the moment somebody
+  # presses SELL THE GOOD SEATS, everyone else's agent starts failing for no
+  # visible reason. `gcloud run deploy` is idempotent, so re-running setup
+  # redeploys over the top rather than erroring.
+  if ./deploy-venue.sh >/tmp/venue-deploy.log 2>&1; then
+    # gcloud bolds the URL, so a greedy [^ ]* match swallows the trailing ANSI
+    # reset and prints as a stray [m. Matching only URL-safe characters stops at
+    # the escape byte instead, with no sed and no locale trouble.
+    VENUE_URL=$(grep -m1 -ao 'https://venue-[A-Za-z0-9._~:/?#@!$&()*+,;=%-]*' \
+                /tmp/venue-deploy.log)
+    echo "→ venue      deployed  $VENUE_URL"
+  else
+    echo "→ venue      FAILED"
+    tail -5 /tmp/venue-deploy.log | sed 's/^/               /'
+    echo "               retry with:  ./deploy-venue.sh"
+  fi
+
   echo ""
   echo "✓ setup complete."
   echo ""
-  echo "  next:  source .venv/bin/activate"
-  echo "         ./deploy-venue.sh     # your own venue on Cloud Run, ~3 min"
-  echo "         adk web agent         # the exact command is in the codelab"
+  echo "  check it:  ./verify.sh"
+  echo "  then:      source .venv/bin/activate"
+  echo "             adk web agent      # the exact command is in the codelab"
 else
   echo "→ model      $MODEL FAILED"
   echo ""

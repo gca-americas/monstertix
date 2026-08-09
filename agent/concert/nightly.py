@@ -76,7 +76,6 @@ warnings.filterwarnings("ignore", message=r".*\[EXPERIMENTAL\].*")
 # called the graph runs on THAT — what you confirmed in the chat is what gets
 # spent tonight, conditions and all.
 DEFAULT_BUDGET = "up to $250 per seat"
-SEATS = 2
 
 
 class Plan(BaseModel):
@@ -106,17 +105,47 @@ def open_the_night(node_input, ctx: Context) -> Event:
     person while they are awake, and spent by a graph while they are not.
     """
     agreed = budget.load(ctx.state) or DEFAULT_BUDGET
+    asked = str(ctx.state.get("request") or "").strip()
     print(f"  [open]        3am. Nobody is awake. Budget: {budget.describe(agreed)}")
+    if asked:
+        print(f"  [open]        they asked for: {asked[:70]}")
     return Event(output=(
-        f"Choose tonight's show and section for {SEATS} seats, and buy nothing "
-        f"yet.\n\nThe budget this person agreed to, in their words:\n\n"
+        "Choose tonight's show and section, and buy nothing yet.\n\n"
+        f"What this person asked for, in their own words:\n\n"
+        f"    {asked or '(nothing said this time. Use what recall() tells you.)'}"
+        f"\n\nThe budget they agreed to, in their words:\n\n"
         f"    {agreed}\n\n"
-        "Apply all of it, including any conditions about days or sections. If "
-        "nothing on the tour fits, choose nothing and say so."
+        "Apply all of it, including any conditions about cities, days, how many "
+        "are coming, or which sections. If nothing on the tour fits, choose "
+        "nothing and say so."
     ))
 
 
 # --- node 1: agree a budget, in the graph, with a real human ---------------
+
+
+def what_they_asked_for(ctx) -> str:
+    """Everything this person typed, joined, in their own words.
+
+    The same argument `budget.py` makes about money applies to the rest of the
+    ask. The tempting design is fields — city, party_size, weekends_only — and it
+    breaks on the first sentence you did not anticipate ("I have 10 people coming
+    with me, but two of them might drop out"). So do not model it. Keep the text
+    and let the picker read it.
+
+    Only `text` parts count, which quietly does the right thing: answers to an
+    interrupt arrive as function_responses, so the budget conversation does not
+    get echoed back in here. What is left is what they freely said.
+    """
+    said = []
+    for event in (ctx.session.events or []):
+        if event.author != "user":
+            continue
+        for part in (event.content.parts if event.content else []) or []:
+            text = (getattr(part, "text", None) or "").strip()
+            if text and text not in said:
+                said.append(text)
+    return "\n".join(said)
 
 
 ASK_BUDGET = "budget:ask"
@@ -147,6 +176,11 @@ def agree_budget(node_input, ctx: Context):
     what somebody said. The second is what they agreed to.
     """
     answers = getattr(ctx, "resume_inputs", None) or {}
+
+    # Do this on every run, not just the first. The node reruns on resume, so a
+    # correction typed later ("actually there are only five of us now") is picked
+    # up here rather than lost.
+    ctx.state["request"] = what_they_asked_for(ctx)
 
     if budget.load(ctx.state):
         return Event(output=budget.load(ctx.state))
@@ -220,8 +254,15 @@ each section's price against it before you choose: if the price is higher than
 that number, that section is not an option, no matter how well it fits the rest
 of what they said. "$200 if they're the good ones" means a $210 seat is out.
 
-The section must also have {SEATS} seats available right now. If nothing is both
-available and under the ceiling, choose nothing.
+How many seats to buy is in that same message, in their words. "I have 10 people
+coming with me" is eleven seats, not ten and not two. If they never say, buy two.
+Whatever number you settle on, put it in `seats`, and the section must have that
+many available right now. If nothing is both available and under the ceiling,
+choose nothing.
+
+The city and the days are in there too. A person who says they live in New York
+and can only do weekends has ruled out every weekday show and every other city,
+even when a cheaper seat exists somewhere they cannot go.
 
 Return the plan. Put the reason in one sentence, in terms of what you know about
 this person — not "section A is the best seats".

@@ -27,63 +27,106 @@
       
       <google-codelab-about codelab-title="Everything You Need to Build Long-Running Agents on Google Cloud"
                             authors="Workshop"
-                            last-updated="2026-08-08T23:32:08Z">
+                            last-updated="2026-08-09T01:04:33Z">
       </google-codelab-about>
       
-      <p>Every agent framework got better at what goes <strong>in the prompt</strong>. None of them got better at <strong>being awake</strong>.</p>
-<p>You are going to build an agent that buys concert tickets. The presale opens at 10am, the tickets are gone in ninety seconds, and you are asleep in another timezone. That one fact forces every hard problem in long-running agents into the open.</p>
+      <p>Buying concert tickets is a job made of waiting.</p>
+<p>The presale opens at a fixed minute. You click, and you are not on a ticket page, you are in a queue behind fourteen thousand people. The queue moves for forty
+minutes. When your turn finally comes you get a few minutes to pick seats and pay, and if you are not there in that window, the queue gives your place away.
+The good seats go in the first ninety seconds.</p>
+<p>None of that is hard. It is just long, and it demands that you be present at a moment you do not choose. So people sit with a browser tab open for an hour,
+doing nothing, in case a number changes.</p>
+<p>That is the shape of an enormous amount of real work: <strong>a task that takes far longer than the conversation that started it, against a system you do not
+control.</strong> Waiting on a supplier to restock. Waiting on a claim to be approved. Waiting on a migration, a build, an approval, a queue.</p>
+<p>An agent is a good fit for that. Most of the agent we build today lives inside a chat turn, and a chat turn does not last forty minutes, and it is not proactive. Something has to run it while nobody is talking to it, and remember why it was running when it wakes up.</p>
+<p>You will build an agent that buys concert tickets while you are asleep or busy at work.</p>
+<!-- raw HTML omitted -->
 <h3>What you'll build</h3>
 <p>A ticket-buying agent that:</p>
 <ul>
 <li>Joins a queue of 14,203 people, <strong>stops running entirely</strong>, and is woken from outside forty minutes later</li>
-<li>Survives having its process killed mid-wait</li>
-<li>Refuses to act on a seat map it read before the wait</li>
-<li>Spends money inside a fence you drew in advance, and stops at the edge of it</li>
-<li>Runs itself at 3am with nobody in the room</li>
+<li>Survives having its process killed mid-wait, and picks up where it left off</li>
+<li>Act on the latest seat map it reads, and ensure idempotency when purchasing</li>
+<li>Implement <strong>graph engineering</strong> rather than a chat system</li>
+<li>Adding human in the loop to confirm how much you are willing to spend</li>
+<li>Ships to cloud serving both a booking app and a scheduler endpoint</li>
 </ul>
-<h3>What you'll learn</h3>
-<ul>
-<li>Why <code>LongRunningFunctionTool</code> plus <code>ResumabilityConfig</code> is what &quot;long-running&quot; actually means</li>
-<li>How ADK's automatic context compaction silently drops the one fact you needed</li>
-<li>Where a fact should live: <code>temp:</code> vs session vs <code>user:</code> vs a memory file</li>
-<li>Why the platform's own retry will buy your tickets twice, and what stops it</li>
-<li>When a step should be a function, when it should be an agent, and how a <code>Workflow</code> graph stops and asks a person a question</li>
-</ul>
-<h3>What you'll need</h3>
-<ul>
-<li><strong>Cloud Shell</strong> — <a href="https://shell.cloud.google.com">shell.cloud.google.com</a>, or any machine with <code>git</code>, <code>gcloud</code> and Python 3.11+</li>
-<li>A Google Cloud project you can use. Have the project id ready — setup will ask for it once.</li>
-</ul>
-<!-- raw HTML omitted -->
 <h3>Get set up</h3>
 <p>👉💻 Clone the repo and run setup:</p>
 <pre><code class="language-bash">git clone &lt;REPO_URL&gt; ~/longrunningag
 cd ~/longrunningag
 ./setup.sh
 </code></pre>
-<p><strong>Everything in this codelab runs from <code>~/longrunningag</code></strong> unless a step says
-otherwise. If a command behaves oddly, check where you are first — <code>pwd</code>.</p>
-<p>Setup asks for your project id, then does everything else: creates the virtualenv, installs ADK, signs you in, points <code>gcloud</code> at your project, enables the nine APIs the workshop needs, writes <code>.env</code>, makes one real call to the model to prove it answers, and builds the pre-loaded session step 4 opens.</p>
 <p>It will ask you this once:</p>
 <pre><code>  Which Google Cloud project should this workshop use?
   Find yours at https://console.cloud.google.com  (top-left picker)
 
   Project id [YOUR_PROJECT_ID]:
 </code></pre>
-<p>Then you should see:</p>
+<p>Then it does the following, in order:</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>virtualenv</strong></td>
+<td>creates <code>.venv</code> and installs ADK 2 into it</td>
+</tr>
+<tr>
+<td><strong>sign-in</strong></td>
+<td><code>gcloud auth application-default login</code> if you have no credentials yet</td>
+</tr>
+<tr>
+<td><strong>project</strong></td>
+<td>points <code>gcloud</code> at your project and sets it as the quota project</td>
+</tr>
+<tr>
+<td><strong>APIs</strong></td>
+<td>enables the nine the workshop needs</td>
+</tr>
+<tr>
+<td><strong><code>.env</code></strong></td>
+<td>writes your project, region and model id, so every script and <code>adk web</code> picks them up</td>
+</tr>
+<tr>
+<td><strong>model check</strong></td>
+<td>makes one real call to Gemini, so a bad project or model id fails here</td>
+</tr>
+<tr>
+<td><strong>seed</strong></td>
+<td>builds a session that is already two days old, which step 3 opens</td>
+</tr>
+<tr>
+<td><strong>Cloud SQL</strong></td>
+<td>starts a Postgres instance <strong>in the background</strong></td>
+</tr>
+<tr>
+<td><strong>venue</strong></td>
+<td>deploys your own fake ticket seller to Cloud Run</td>
+</tr>
+</tbody>
+</table>
+<p>The nine APIs: <code>aiplatform</code>, <code>run</code>, <code>cloudbuild</code>, <code>artifactregistry</code>, <code>storage</code>, <code>pubsub</code>, <code>cloudscheduler</code>, <code>cloudtrace</code> and <code>sqladmin</code>. The first six run the agent and the venue, and the last three are only needed once you deploy in the final step.</p>
+<p>You should see:</p>
 <pre><code>→ venv       creating with uv
-→ project    vibeflix-test-3
+→ project    your-project-id
 → auth       ok
-→ quota      set to vibeflix-test-3
+→ quota      set to your-project-id
 → apis       all 9 already enabled
 → model      gemini-2.5-flash responds
 → seed       session 'two-days-ago' ready (13 events, 2 days old)
+→ cloudsql   creating workshop-sessions in the background (~10 min)
+→ venue      deployed  https://venue-you-xxxx.us-central1.run.app
 
 ✓ setup complete.
 
-  next:  source .venv/bin/activate
-         ./deploy-venue.sh     # your own venue on Cloud Run, ~3 min
-         adk web agent         # the exact command is below
+  check it:  ./verify.sh
+  then:      source .venv/bin/activate
+             adk web agent      # the exact command is in the codelab
 </code></pre>
 <!-- raw HTML omitted -->
 <p>👉💻 Activate the environment:</p>
@@ -93,54 +136,35 @@ source .venv/bin/activate
 <p>Your prompt now starts with <code>(.venv)</code>.</p>
 <!-- raw HTML omitted -->
 <h3>Verify your installation</h3>
-<p>👉💻 Three checks. All three should pass before you go on:</p>
-<pre><code class="language-bash">cd ~/longrunningag
-adk --version
-python -c &quot;from google.adk.apps.app import App, ResumabilityConfig; print('adk 2 apis ok')&quot;
-python -c &quot;import sqlalchemy, aiosqlite, greenlet; print('session storage ok')&quot;
-sqlite3 sessions.db &quot;select count(*) || ' seeded events' from events;&quot;
+<p>👉💻 One command, eight ticks:</p>
+<pre><code class="language-bash">./verify.sh
 </code></pre>
-<p>Expected output:</p>
-<pre><code>adk, version 2.6.2
-adk 2 apis ok
-session storage ok
-13 seeded events
-</code></pre>
-<!-- raw HTML omitted -->
-<p>👉💻 Now deploy your own venue — the fake ticket seller your agent will buy from:</p>
-<pre><code class="language-bash">cd ~/longrunningag
-./deploy-venue.sh
-</code></pre>
-<p>This builds a container and deploys it to Cloud Run under your own name, then writes its URL into <code>.env</code>. It takes two or three minutes.</p>
-<pre><code>→ service   venue-yourname
-...
-→ health    {&quot;ok&quot;:true,&quot;clock_multiplier&quot;:1.0}
+<pre><code>  Checking the rig
 
-✓ venue deployed
-   panel     https://venue-yourname-xxxx.run.app/panel
-   VENUE_URL written to .env
+  ✓ adk installed                      adk, version 2.6.2
+  ✓ adk 2 apis                         App + ResumabilityConfig
+  ✓ workflow graphs                    Workflow + node
+  ✓ async sqlite drivers               sqlalchemy + aiosqlite + greenlet
+  ✓ project                            your-project-id
+  ✓ vertex ai                          no API keys anywhere
+  ✓ seeded session                     13 events, two days old
+  ✓ venue                              https://venue-you-xxxx.us-central1.run.app
+
+  Ready. Cloud SQL is still building in the background and nothing
+  before step 10 needs it.
 </code></pre>
-<!-- raw HTML omitted -->
+<p><strong>All eight before you go on.</strong> Every one of them is something that fails later
+and confusingly if it is wrong now.</p>
 <h3>Start the rig</h3>
-<p>Nothing here is wrapped in a script, because the flags change between steps and
-those flags are most of what you are here to learn. The only thing hidden is
-config that never changes.</p>
-<p>Your venue is already running on Cloud Run, so there is one process to start
-and it is the agent.</p>
+<p>There is the agent process with the developer tool. TODO explain what is ADK web</p>
 <p>👉💻 <strong>Terminal 1</strong> — load the starting agent, then serve it:</p>
 <pre><code class="language-bash">cd ~/longrunningag
 . ./set_env.sh
-./use-solution.sh 1
+./use-solution.sh 1 --force
 adk web agent --port 8000
 </code></pre>
-<p><code>use-solution.sh</code> copies a step's finished code into <code>agent/</code>, which is where
-you work. Every step starts with it, so nobody is ever more than one command
-behind, and it prints which files it changed so you know what to read.</p>
-<p>It also resets the state around that code — <code>memory/userx.md</code> back to its
-starting file, <code>sessions.db</code> rebuilt with the seeded conversation back in it,
-<code>artifacts/</code> emptied. The agent writes to all three as it runs, so without this
-a step behaves differently the second time you try it. Pass <code>--keep</code> if you
-want the code and none of that.</p>
+<p><code>use-solution.sh</code> copies a step's finished code into <code>agent/</code>, which is where you work. Every step starts with it, so nobody is ever more than one command behind, and it prints which files it changed so you know what to read.
+It also resets the state around that code — <code>memory/userx.md</code> back to its starting file, <code>sessions.db</code> rebuilt with the seeded conversation back in it, <code>artifacts/</code> emptied. The agent writes to all three as it runs, so without this a step behaves differently the second time you try it. Pass <code>--keep</code> if you want the code and none of that.</p>
 <!-- raw HTML omitted -->
 <p>What you start with:</p>
 <table>
@@ -169,9 +193,7 @@ want the code and none of that.</p>
 </tr>
 </tbody>
 </table>
-<p><code>. ./set_env.sh</code> activates the virtualenv, loads your project and model, and
-exports <code>$WORKSHOP</code> — the absolute path to <code>~/longrunningag</code>. Run it in
-<strong>every</strong> terminal you open. It prints what it set:</p>
+<p><code>. ./set_env.sh</code> activates the virtualenv, loads your project and model, and exports <code>$WORKSHOP</code> — the absolute path to <code>~/longrunningag</code>. Run it in <strong>every</strong> terminal you open. It prints what it set:</p>
 <pre><code>  folder   /home/you/longrunningag
   project  vibeflix-test-3
   model    gemini-2.5-flash
@@ -192,13 +214,13 @@ exports <code>$WORKSHOP</code> — the absolute path to <code>~/longrunningag</c
 </tr>
 <tr>
 <td><strong><code>$VENUE_URL/panel</code></strong></td>
-<td>The control panel — your buttons. <code>deploy-venue.sh</code> printed this URL</td>
+<td>The control panel, your buttons. <code>setup.sh</code> printed this URL and put it in <code>.env</code></td>
 </tr>
 </tbody>
 </table>
 <!-- raw HTML omitted -->
 <h3>Look at what your venue sells</h3>
-<p>Start on the <strong>venue tab</strong> at <code>/panel</code>, not the agent. Find <strong>THE TOUR</strong>:</p>
+<p>Start on the <strong>venue tab</strong> at <code>/panel</code>:</p>
 <blockquote>
 <h2>The Midnight Signal</h2>
 <p><em>The only artist this venue sells.</em></p>
@@ -272,14 +294,42 @@ exports <code>$WORKSHOP</code> — the absolute path to <code>~/longrunningag</c
 </tr>
 </tbody>
 </table>
-<p>Eight shows, five cities, 2,500 seats each, three price tiers, and exactly one
-artist — the name at the top is the only one this venue knows about.</p>
-<p>👉 Note the three rows marked <strong>·weeknight</strong> in amber. Remember they are there —
-a friend called Sam is going to have opinions about them from step 4 onwards.</p>
+<p>Eight shows, five cities, 2,500 seats each, three price tiers, and exactly one artist — the name at the top is the only one this venue knows about.</p>
+<p>👉 Note the three rows marked <strong>·weeknight</strong> in amber. Remember they are there.</p>
+<h3>You have used this agent before</h3>
+<p>The agent does not start from nothing, and that is deliberate. Two things are
+already sitting on your laptop when you begin.</p>
+<p><strong>A conversation from two days ago.</strong> You and the agent were talking about going
+to see The Midnight Signal. It went roughly like this:</p>
+<pre><code>you    We're thinking about seeing The Midnight Signal. Me, Sam, and maybe Priya.
+agent  ...
+you    Yes. Sam can't do weeknights though, bailed on every single one.
+you    What's it going to cost?
+agent  Two lower bowl seats is $420 all in.
+you    Priya's out, she's away that weekend. Just me and Sam.
+agent  Two it is. Still Saturday the 14th, still Amsterdam.
+you    You said the upper bowl at Ziggo was bad last time?
+you    Fine. Let's try for the presale.
+</code></pre>
+<p>That conversation is a real session in <code>sessions.db</code>, thirteen events, timestamped
+two days ago. You will open it in step 3 and watch what the agent still knows.</p>
+<p><strong>A memory file from three past bookings.</strong> <code>memory/userx.md</code> is a markdown file
+you can open in an editor. It holds what previous bookings taught the agent:</p>
+<pre><code>- Sam bails on weeknights. Every weeknight show we booked, Sam cancelled.
+- Hates the upper bowl at Ziggo Dome — &quot;couldn't see a thing&quot; from section B.
+- Comfortable spend is around $200 per ticket. $250 is the hard ceiling.
+- Always books two seats, always together.
+</code></pre>
+<p>Three bookings, two of them disappointments, and both disappointments avoidable:
+one was a weeknight, one was the upper bowl.</p>
+<p><strong>This is why those amber rows matter.</strong> A weeknight show is cheaper and has
+better seats left, and it is the wrong answer for this person, and the only
+reason the agent can know that is a file it wrote after the last time. Whether
+that fact survives is the subject of steps 4 and 5, and losing it is the subject
+of step 5 in particular.</p>
 <!-- raw HTML omitted -->
 <h3>Now ask the agent</h3>
-<p>👉 Switch to <strong>localhost:8000</strong>. Check the dropdown in the top bar says
-<strong><code>concert</code></strong> — with only one app it selects itself.</p>
+<p>👉 Switch to <strong>localhost:8000</strong>. Check the dropdown in the top bar says <strong><code>concert</code></strong> — with only one app it selects itself.</p>
 <p>👉✨ Type this in the box at the bottom:</p>
 <pre><code>What shows are coming up?
 </code></pre>
@@ -289,22 +339,16 @@ a friend called Sam is going to have opinions about them from step 4 onwards.</p
 Mexico City and Auckland.</p>
 </blockquote>
 <p>The same five cities you just read off the panel.</p>
-<p>The agent did not know them. The Midnight Signal is invented, so there is
-nothing about it in the model's training data, and the tour is not in the
-prompt either. It found out the only way it could: it called <code>search_events</code>,
-and your venue answered.</p>
-<p>Everything the agent knows in this workshop arrives that way.</p>
-<!-- raw HTML omitted -->
+<p>The agent did not know them. The Midnight Signal is invented, so there is nothing about it in the model's training data, and the tour is not in the prompt either. It found out the only way it could: it called <code>search_events</code>,
+and your venue answered. This is how the agent knows in this workshop.</p>
 <h3>Read what just happened</h3>
-<p>The middle of the screen is not only a chat log. Every step of the turn is
-numbered, tool calls included:</p>
+<p>The middle of the screen is not only a chat log. Every step of the turn is numbered, tool calls included:</p>
 <pre><code>#1  ▸ What shows are coming up?                     ← you
 #2  ⚡ search_events({})                              ← the model chose a tool
 #3  ✓ search_events                                  ← the venue answered
 #4    The Midnight Signal has shows coming up in ...  ← the reply
 </code></pre>
-<p>👉 Click <strong>#2</strong>. The left panel shows the arguments the model picked — none,
-in this case. Click <strong>#3</strong> for the JSON the venue sent back.</p>
+<p>👉 Click <strong>#2</strong>. The left panel shows the arguments the model picked — none, in this case. Click <strong>#3</strong> for the JSON the venue sent back.</p>
 <p>That numbered stream is where you diagnose everything for the rest of the day.</p>
 <h3>What you just ran</h3>
 <p>You have seen it work and seen the trace. Now look at the thing itself.</p>
@@ -329,9 +373,7 @@ root_agent = Agent(
     tools=[search_events, get_seatmap],
 )
 </code></pre>
-<p>A name, a model, some prose, and a list of Python functions. That is all an
-<code>Agent</code> is. <code>adk web</code> found it because the file is called <code>agent.py</code> and the
-variable is called <code>root_agent</code>.</p>
+<p>A name, a model, some prose, and a list of Python functions. That is all an <code>Agent</code> is. <code>adk web</code> found it because the file is called <code>agent.py</code> and the variable is called <code>root_agent</code>.</p>
 <p>👉💻 Now <code>agent/concert/tools.py</code>:</p>
 <pre><code class="language-python">def search_events(city: str = &quot;&quot;, weekday: str = &quot;&quot;) -&gt; dict:
     &quot;&quot;&quot;List tour dates. Call with no arguments to see the whole tour.
@@ -345,18 +387,12 @@ variable is called <code>root_agent</code>.</p>
     &quot;&quot;&quot;
     return venue.get(&quot;/events&quot;, city=city, weekday=weekday)
 </code></pre>
-<p>An ordinary function. No decorator, no registration, no schema to write. ADK
-reads the signature and the docstring and builds the tool definition the model
-sees — which is why that docstring is load-bearing, and why deleting one
-argument changed the model's behaviour.</p>
+<p>An ordinary function. No decorator, no registration, no schema to write. ADK reads the signature and the docstring and builds the tool definition the model sees — which is why that docstring is load-bearing, and why deleting one argument changed the model's behaviour.</p>
 <p><strong>The model never runs your code.</strong> When you clicked <code>#2</code> and saw
 <code>search_events({})</code>, the model was <em>asking</em> for that call. ADK ran the function,
 handed the result back, and the model wrote a sentence about it. The loop is:</p>
 <pre><code>   model decides  →  ADK calls your Python  →  result returned  →  model replies
 </code></pre>
-<p>Every step from here adds to these same two files. By step 9 <code>agent.py</code> has a
-sub-agent, an approval desk and a compaction config, and <code>tools.py</code> has nine
-functions — but the shape never changes.</p>
 <p>👉 Now look at the four tabs on the <strong>left</strong>:</p>
 <table>
 <thead>
@@ -394,12 +430,8 @@ is the <strong>agent graph</strong> — try it:</p>
 </code></pre>
 <p>Two tools today. By step 9 that graph has a sub-agent, an approval desk and
 nine tools, and it is the fastest way to see what you have built.</p>
-<p><strong>Toggle Traces</strong> next to Events for timing — how long the model took versus
-the tool. Useful in step 6, when something takes forty minutes on purpose.</p>
-<p><strong>New Session</strong> in the top bar starts a fresh conversation, and the dropdown
-beside it lists every session on this app. Step 4 uses it to open one you did
-not create.</p>
-<!-- raw HTML omitted -->
+<p><strong>Toggle Traces</strong> next to Events for timing — how long the model took versus the tool. Useful in step 6, when something takes forty minutes on purpose.</p>
+<p><strong>New Session</strong> in the top bar starts a fresh conversation, and the dropdown beside it lists every session on this app. Step 4 uses it to open one you did not create.</p>
 <!-- raw HTML omitted -->
 <!-- raw HTML omitted -->
 <hr>
@@ -2167,7 +2199,7 @@ adk web agent --port 8000 \
 </tr>
 <tr>
 <td><code>nightly.py</code></td>
-<td>the 3am run reads the same agreement, instead of a constant</td>
+<td><code>agree_budget</code> captures the budget <strong>and</strong> the rest of the ask, both as free text. <code>SEATS</code> as a constant is gone</td>
 </tr>
 </tbody>
 </table>
@@ -2191,10 +2223,72 @@ stores the words:</p>
 <pre><code>state[&quot;budget&quot;] = &quot;up to $100 for the upper bowl or general admission, up to
                    $250 for the lower bowl, and up to $300 for a Saturday show&quot;
 </code></pre>
-<p>What matters is not the shape. It is that <strong>the person said it</strong>, <strong>they
-confirmed it</strong>, and <strong>it lives under <code>user:</code></strong> — where this conversation cannot
-reach it, and where it will still be tomorrow, in a session that does not exist
-yet.</p>
+<p>What matters is not the shape. It is that <strong>the person said it</strong> and <strong>they
+confirmed it</strong>. It lives in session state, not under <code>user:</code>, and that is on
+purpose: a budget is agreed for one booking. &quot;Two-fifty if they're the good ones&quot;
+was about that band, that night. Put it under <code>user:</code> and it quietly governs
+every run this person ever makes, including the ones where they would have said
+something different, and they never get asked again.</p>
+<h3>The same is true of everything else they said</h3>
+<p>A budget is not the only thing a person tells you, and it would be strange to
+store one sentence faithfully and turn the rest into fields.</p>
+<pre><code>&quot;I live in NYC, I can only do weekends, I have 10 people coming with me&quot;
+</code></pre>
+<p>Model that and you need a city, a day-of-week rule, and a party size. Then
+somebody says <em>&quot;ten of us, but two might drop out&quot;</em>, or <em>&quot;anywhere on the east
+coast&quot;</em>, and every field is wrong at once. So the graph keeps that sentence too:</p>
+<pre><code class="language-python">def what_they_asked_for(ctx) -&gt; str:
+    &quot;&quot;&quot;Everything this person typed, joined, in their own words.&quot;&quot;&quot;
+    said = []
+    for event in (ctx.session.events or []):
+        if event.author != &quot;user&quot;:
+            continue
+        for part in (event.content.parts if event.content else []) or []:
+            text = (getattr(part, &quot;text&quot;, None) or &quot;&quot;).strip()
+            if text and text not in said:
+                said.append(text)
+    return &quot;\n&quot;.join(said)
+</code></pre>
+<p><code>agree_budget</code> calls it on <strong>every</strong> run, not just the first, so a correction
+typed while the agent is queueing lands too. <code>open_the_night</code> then hands the
+picker both sentences, the ask and the budget, and the picker reads them.</p>
+<!-- raw HTML omitted -->
+<!-- raw HTML omitted -->
+<h3>The graph, one node longer</h3>
+<p>Step 8's graph started at the show. This one starts with a conversation:</p>
+<pre><code class="language-python">nightly = Workflow(
+    name=&quot;concert_nightly&quot;,
+    edges=[(START, agree_budget, open_the_night, pick_show, queue_up,
+            check_front, brief, buyer_agent)],
+)
+</code></pre>
+<pre><code>   START
+     │
+     ▼
+   agree_budget      ← asks, reads back, stores both sentences   [ NEW ]
+     │
+     ▼
+   open_the_night    ← hands the picker the ask and the budget
+     │
+     ▼
+   pick_show         agent   · judgement
+     │
+     ▼
+   queue_up          function · a rule, and exactly once
+     │
+     ▼
+   check_front  ─────┐  not ready yet
+     │   ▲           │
+     │   └───────────┘  RequestInput, answered by the next wake-up
+     ▼
+   brief             function · what the buyer is allowed to do
+     │
+     ▼
+   buyer_agent       agent   · spends the money
+</code></pre>
+<p><strong>Two nodes stop and wait, and they are the same mechanism.</strong> <code>check_front</code>
+waits for a venue and is answered by a clock. <code>agree_budget</code> waits for a person
+and can only be answered by a person. That difference is the whole of step 10.</p>
 <h3>Run it — step by step</h3>
 <p>Everything happens in <strong><code>concert</code></strong>, and <code>concert</code> is now the graph. You never
 leave <code>adk web</code>.</p>
@@ -2646,16 +2740,17 @@ which is the only reason there is anything to look at.</p>
 <!-- raw HTML omitted -->
 <!-- raw HTML omitted -->
 <h3>Clean up</h3>
-<p>👉💻 The service and the schedule:</p>
-<pre><code class="language-bash">cd ~/longrunningag
-./destroy-agent.sh
+<p>Two things are deployed: the venue, and the agent beside it. Both scale to zero,
+so an idle one costs nothing. Delete them anyway.</p>
+<pre><code class="language-bash">./destroy-agent.sh          # service, topic, subscription, scheduler job
 ./destroy-venue.sh
 </code></pre>
-<p>That deliberately leaves Cloud SQL and the bucket alone — they hold your data,
-and deleting a Cloud Run service does not touch either. <strong>Both keep billing.</strong></p>
-<p>👉💻 When you are really finished:</p>
+<p>Those deliberately leave Cloud SQL and the bucket alone, because they hold your
+data and <strong>both keep billing</strong>. When you are certain you are finished:</p>
 <pre><code class="language-bash">./destroy-agent.sh --all
 </code></pre>
+<p>Everything else is local. Delete the folder when you are done, or keep it. It
+runs against your own project for as long as you like.</p>
 <blockquote>
 <p><strong>The agent, its tools, its callbacks and the budget did not change. Two URIs
 and one environment variable did.</strong></p>
@@ -2664,9 +2759,55 @@ and one environment variable did.</strong></p>
 
     </google-codelab-step>
     
-    <google-codelab-step label="What you built" duration="0">
+    <google-codelab-step label="What you built, and what to do when it breaks" duration="0">
       
-      <h3>Everything you just learned, in one place</h3>
+      <h3>The diff between your laptop and production</h3>
+<table>
+<thead>
+<tr>
+<th>Your laptop</th>
+<th>In the cloud</th>
+<th>What changed</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--session_service_uri=sqlite+aiosqlite:///…</code></td>
+<td>Cloud SQL</td>
+<td>a connection string</td>
+</tr>
+<tr>
+<td><code>--artifact_service_uri=file://…</code></td>
+<td><code>gs://bucket</code></td>
+<td>a URI</td>
+</tr>
+<tr>
+<td><code>memory/userx.md</code></td>
+<td><code>gs://bucket/memory/</code></td>
+<td>a path</td>
+</tr>
+<tr>
+<td><code>adk web</code></td>
+<td>one Cloud Run service</td>
+<td>a <code>Dockerfile</code> and a <code>main.py</code></td>
+</tr>
+<tr>
+<td><code>monstertix/clock.py</code></td>
+<td>Cloud Scheduler → Pub/Sub</td>
+<td><code>trigger_sources=[&quot;pubsub&quot;]</code></td>
+</tr>
+<tr>
+<td>you, at the keyboard</td>
+<td><code>someone_is_there()</code></td>
+<td>a default, overridden per request</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Your <code>root_agent</code>, its tools, its callbacks and the budget are unchanged.</strong>
+<code>solutions/step10_deploy/concert/</code> is byte-for-byte the folder you finished step
+9 with. Diff them if you want to see it. That is the argument for ADK's service
+abstraction, and it is the last thing worth remembering.</p>
+<h3>Everything you just learned, in one place</h3>
 <p>Ten steps, and each one added exactly one idea. If you remember nothing else,
 remember which problem each of these solves.</p>
 <table>
@@ -2730,6 +2871,10 @@ remember which problem each of these solves.</p>
 <td>The number came from the person, they confirmed it, and it lives where the conversation cannot reach it.</td>
 </tr>
 <tr>
+<td><strong>Attendedness is per request</strong></td>
+<td>The same deployed service serves a browser and a scheduler. Only one of them can answer a question.</td>
+</tr>
+<tr>
 <td><strong>Durable state</strong></td>
 <td>A container's filesystem dies with the container. Sessions, memory and artifacts all need somewhere that outlives it.</td>
 </tr>
@@ -2763,6 +2908,8 @@ Build it in this shape:
     rerun_on_resume=False on anything with a side effect
   - the limits are agreed with a person, confirmed back to them, and
     stored in state the conversation cannot reach
+  - whether a person is there is a fact about the REQUEST, not the
+    process: the chat route says so, the scheduler route does not
   - re-read anything time-sensitive in a before_tool_callback right
     before acting, and send an idempotency key on anything that spends
   - sessions in Cloud SQL, memory and artifacts in Cloud Storage
@@ -2774,100 +2921,13 @@ after that works.
 </code></pre>
 <p>The last line matters more than the rest. Everything in this workshop was easy
 once the run could stop and start again, and impossible before.</p>
-<h3>The diff between your laptop and production</h3>
-<table>
-<thead>
-<tr>
-<th>Your laptop</th>
-<th>Production</th>
-<th>What changed</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>--session_service_uri=sqlite+aiosqlite:///…</code></td>
-<td>Cloud SQL</td>
-<td>a connection string</td>
-</tr>
-<tr>
-<td><code>--artifact_service_uri=file://…</code></td>
-<td><code>gs://bucket</code></td>
-<td>a URI</td>
-</tr>
-<tr>
-<td><code>memory/*.md</code></td>
-<td><code>gs://bucket/memory/</code></td>
-<td>a path</td>
-</tr>
-<tr>
-<td><code>adk web</code> / <code>monstertix/server.py</code></td>
-<td><code>gcloud run deploy --source agent</code></td>
-<td>one command</td>
-</tr>
-<tr>
-<td><code>monstertix/clock.py</code></td>
-<td>Cloud Scheduler → Pub/Sub</td>
-<td><code>trigger_sources=[&quot;pubsub&quot;]</code></td>
-</tr>
-<tr>
-<td>a human answering an interrupt</td>
-<td><code>someone_is_there()</code></td>
-<td>a default, overridden per request</td>
-</tr>
-<tr>
-<td>your project, one venue</td>
-<td>shared project, real traffic</td>
-<td>a project id</td>
-</tr>
-</tbody>
-</table>
-<p><strong>Your <code>root_agent</code>, tools, callbacks and budget are unchanged.</strong> That is the argument for ADK's service abstraction, and it is the last thing worth remembering.</p>
-<h3>Three shapes, three situations</h3>
-<table>
-<thead>
-<tr>
-<th>Where</th>
-<th>What</th>
-<th>Why there</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>Steps 2–7</td>
-<td><code>Agent</code> + tools + callbacks</td>
-<td>A human is in the conversation. Let the model choose.</td>
-</tr>
-<tr>
-<td>Steps 8–10</td>
-<td><code>Workflow(edges=[…])</code></td>
-<td>The steps that must not vary are functions; the ones needing judgement are agent nodes.</td>
-</tr>
-<tr>
-<td>inside that graph</td>
-<td><code>RequestInput</code></td>
-<td>The run parks — for a queue that is not ready, or for a person who has not answered. One mechanism, both cases.</td>
-</tr>
-</tbody>
-</table>
 <h3>If you got stuck</h3>
 <p>Every step has complete working code:</p>
-<pre><code class="language-bash">cd ~/longrunningag
-./use-solution.sh N          # any step. resets memory + sessions + artifacts
+<pre><code class="language-bash">./use-solution.sh N          # any step. resets memory + sessions + artifacts
 ./use-solution.sh N --keep   # code only, leave state alone
 </code></pre>
-<h3>Clean up</h3>
-<p>One thing is still deployed: the venue on Cloud Run. It scales to zero, so it
-is not costing you anything while idle — delete it anyway.</p>
-<pre><code class="language-bash">gcloud run services delete venue-$(gcloud config get-value account | cut -d@ -f1) --region us-central1
-</code></pre>
-<p>Everything else is local. Delete the folder when you are done, or keep it — it runs against your own project for as long as you like.</p>
-<hr>
-
-    </google-codelab-step>
-    
-    <google-codelab-step label="Troubleshooting" duration="0">
-      
-      <table>
+<h3>When something breaks</h3>
+<table>
 <thead>
 <tr>
 <th>Symptom</th>
