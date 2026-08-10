@@ -1,11 +1,14 @@
 ---
-id: long-running-agent-concert-tickets
+
+id: monstertix
 summary: An agent that waits in a queue, survives being killed, and buys tickets at 3am inside limits you set. ADK 2 on Google Cloud.
-categories: ai,agents,adk
-tags: adk,agents,gemini,cloud-run,long-running
+categories: Cloud, AiAndMachineLearning
 authors: Christina Lin
-duration: 120
+Feedback Link: https://github.com/google/monstertix
+
+
 ---
+
 
 # Everything You Need to Build Long-Running Agents on Google Cloud
 
