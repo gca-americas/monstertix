@@ -25,7 +25,12 @@ if [ -d "$_root/.venv" ]; then
 fi
 
 export GOOGLE_CLOUD_PROJECT="${GOOGLE_CLOUD_PROJECT:-$(cat "$HOME/project_id.txt" 2>/dev/null)}"
+# Two different ideas, and they are not interchangeable.
+#   LOCATION  where the MODEL is served. "global" is right for Gemini on Vertex.
+#   REGION    where SERVICES live: Cloud Run, Cloud SQL, buckets, Pub/Sub,
+#             Scheduler. Every deploy script reads this one.
 export GOOGLE_CLOUD_LOCATION="${GOOGLE_CLOUD_LOCATION:-global}"
+export GOOGLE_CLOUD_REGION="${GOOGLE_CLOUD_REGION:-us-central1}"
 export GOOGLE_GENAI_USE_VERTEXAI="${GOOGLE_GENAI_USE_VERTEXAI:-true}"
 export ADK_MODEL="${ADK_MODEL:-gemini-2.5-flash}"
 

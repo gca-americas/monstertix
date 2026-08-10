@@ -67,6 +67,11 @@ PROJECT=""
 
 if [ -n "${PROJECT_ID:-}" ]; then
   PROJECT="$PROJECT_ID"
+elif [ -n "${GOOGLE_CLOUD_PROJECT:-}" ]; then
+  # Already set in this shell — somebody has configured their environment, so
+  # use it quietly rather than asking a question they have already answered.
+  PROJECT="$GOOGLE_CLOUD_PROJECT"
+  REMEMBERED=env
 elif [ -f "$PROJECT_FILE" ]; then
   PROJECT=$(tr -d '[:space:]' < "$PROJECT_FILE")
   [ -n "$PROJECT" ] && REMEMBERED=yes
@@ -117,11 +122,27 @@ fi
 
 printf '%s\n' "$PROJECT" > "$PROJECT_FILE"
 gcloud config set project "$PROJECT" >/dev/null 2>&1
-if [ "${REMEMBERED:-}" = "yes" ]; then
+if [ "${REMEMBERED:-}" = "env" ]; then
+  echo "→ project    $PROJECT  (from GOOGLE_CLOUD_PROJECT in your shell)"
+elif [ "${REMEMBERED:-}" = "yes" ]; then
   echo "→ project    $PROJECT  (remembered — rm $PROJECT_FILE to change)"
 else
   echo "→ project    $PROJECT  (saved to $PROJECT_FILE)"
 fi
+
+# Location and region: use whatever is already set, and only fall back if it is
+# not. Somebody with GOOGLE_CLOUD_LOCATION exported has told us where they work,
+# and asking again or overwriting it would be rude.
+#
+#   GOOGLE_CLOUD_LOCATION   where the MODEL is served. "global" is right for
+#                           Gemini on Vertex and is not a Cloud Run region.
+#   GOOGLE_CLOUD_REGION     where SERVICES live: Cloud Run, Cloud SQL, buckets,
+#                           Pub/Sub, Scheduler. Everything deployable uses this.
+LOCATION="${GOOGLE_CLOUD_LOCATION:-global}"
+REGION="${GOOGLE_CLOUD_REGION:-$(gcloud config get-value run/region 2>/dev/null)}"
+case "$REGION" in ""|"(unset)") REGION="us-central1" ;; esac
+export GOOGLE_CLOUD_LOCATION="$LOCATION" GOOGLE_CLOUD_REGION="$REGION"
+echo "→ location   $LOCATION  (model)   ·   region  $REGION  (services)"
 
 # The project id is the one line in .env that differs per student, so write it
 # rather than making them edit it by hand.
@@ -130,6 +151,15 @@ if grep -q '^GOOGLE_CLOUD_PROJECT=' .env; then
 else
   printf 'GOOGLE_CLOUD_PROJECT=%s\n' "$PROJECT" >> .env
 fi
+
+for pair in "GOOGLE_CLOUD_LOCATION=$LOCATION" "GOOGLE_CLOUD_REGION=$REGION"; do
+  key="${pair%%=*}"
+  if grep -q "^$key=" .env; then
+    sed -i.bak "s|^$key=.*|$pair|" .env && rm -f .env.bak
+  else
+    printf '%s\n' "$pair" >> .env
+  fi
+done
 
 . ./.env 2>/dev/null
 GOOGLE_CLOUD_PROJECT="$PROJECT"
@@ -204,7 +234,7 @@ fi
 
 # Prove the model actually answers, so nobody discovers a 404 mid-workshop.
 MODEL="${ADK_MODEL:-gemini-2.5-flash}"
-CHECK=$(.venv/bin/python - "$PROJECT" "${GOOGLE_CLOUD_LOCATION:-global}" "$MODEL" <<'PY' 2>&1
+CHECK=$(.venv/bin/python - "$PROJECT" "$LOCATION" "$MODEL" <<'PY' 2>&1
 import sys
 try:
     from google import genai
@@ -247,7 +277,7 @@ if [ "${CHECK:0:2}" = "OK" ]; then
   else
     nohup gcloud sql instances create "$SQL_INSTANCE" \
       --project "$PROJECT" --database-version=POSTGRES_15 \
-      --tier=db-f1-micro --region="${VENUE_REGION:-us-central1}" \
+      --tier=db-f1-micro --region="$REGION" \
       --storage-size=10 --storage-type=HDD --no-backup --quiet \
       >"$HOME/.cloudsql-create.log" 2>&1 &
     echo "→ cloudsql   creating $SQL_INSTANCE in the background (~10 min)"

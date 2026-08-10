@@ -26,7 +26,7 @@ Most agents you build today live inside a chat turn. A chat turn does not last f
 This workshop walks you through the concert ticket scenario, and through the things you need to know to build agents like this.
 
 <aside class="negative">
-<b>⚠️ ETHICAL DISCLAIMER: Ticket bots are a real problem (we hate them!) and real ticketing sites prohibit automation.</b> This workshop runs against a <b>mock venue service</b>, buying <b>one</b> allotment for <b>yourself</b>, inside limits you set.
+<b>⚠️ ETHICAL DISCLAIMER:<br/> Ticket bots are a real problem (we hate them!) and real ticketing sites prohibit automation.</b> This workshop runs against a <b>mock venue service</b>, buying <b>one</b> allotment for <b>yourself</b>, inside limits you set.
 </aside>
 
 ### What you'll build

@@ -18,7 +18,7 @@ cd "$(dirname "$0")"
 [ -f .env ] && set -a && . ./.env && set +a
 
 PROJECT="${GOOGLE_CLOUD_PROJECT:?set GOOGLE_CLOUD_PROJECT — run ./setup.sh}"
-REGION="${AGENT_REGION:-us-central1}"
+REGION="${AGENT_REGION:-${GOOGLE_CLOUD_REGION:-us-central1}}"
 
 WHO=$(gcloud config get-value account 2>/dev/null | cut -d@ -f1 \
       | tr '[:upper:]' '[:lower:]' | tr -c 'a-z0-9-' '-' | sed 's/-*$//' | cut -c1-24)
