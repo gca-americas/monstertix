@@ -44,7 +44,12 @@ if [ "${1:-}" = "local" ]; then
   _local_arg="yes"
 fi
 
-export VENUE_URL="${VENUE_URL:-http://127.0.0.1:8080}"
+# NO localhost default. `${VENUE_URL:-...}` treats an empty value the same as an
+# unset one, so a blank VENUE_URL= in .env — which is what you have before the
+# venue is deployed — silently became 127.0.0.1. The agent then talked to a
+# machine that was not running, and it looked like the agent was broken.
+# `. ./set_env.sh local` is how you ask for localhost, on purpose.
+export VENUE_URL
 export AGENT_URL="${AGENT_URL:-http://127.0.0.1:8000}"
 # Hardcoded, not defaulted. `${MEMORY_USER:-userx}` politely keeps whatever is
 # already in the shell, so anyone who exported an old value once kept it through

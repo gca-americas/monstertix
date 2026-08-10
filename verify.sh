@@ -80,6 +80,8 @@ else
 fi
 
 # --- the venue ------------------------------------------------------------
+pass "region" "${GOOGLE_CLOUD_REGION:-us-central1}  (services)"
+
 if [ -n "${VENUE_URL:-}" ]; then
   if curl -sf --max-time 20 "$VENUE_URL/health" >/dev/null 2>&1; then
     pass "venue" "$VENUE_URL"
@@ -87,7 +89,7 @@ if [ -n "${VENUE_URL:-}" ]; then
     fail "venue" "$VENUE_URL not answering — ./deploy-venue.sh"
   fi
 else
-  fail "venue" "VENUE_URL not in .env — ./deploy-venue.sh"
+  fail "venue" "not deployed yet — run ./deploy-venue.sh"
 fi
 
 echo ""
