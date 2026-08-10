@@ -13,6 +13,8 @@ duration: 120
 
 Most ticketing sites these days put you in a queue, partly to stop the site falling over and partly to make the sale fairer. So you start your purchase and find yourself behind fourteen thousand people. The queue moves for forty minutes. When your turn finally comes you get a few minutes to pick seats and pay, and if you are not there in that window, the queue gives your place away. It is a long, frustrating wait, and it demands you be there the whole time. So people sit with a browser tab open for an hour, doing nothing, in case it is their turn.
 
+![The Midnight Signal, on tour](img/poster.png)
+
 Recognise the pattern: **a task that takes far longer than the conversation, against something you do not control.** Waiting on a supplier to restock. Waiting on a claim to be approved. Waiting on a migration, a build, an approval, a queue.
 This is why you need a **long-running agent**.
 
@@ -69,17 +71,41 @@ Then it does the following, in order:
 | **model check** | makes one real call to Gemini, so a bad project or model id fails here |
 | **seed** | builds a session that is already two days old, which step 3 opens |
 | **Cloud SQL** | starts a Postgres instance **in the background** |
-| **venue** | deploys your own fake ticket seller to Cloud Run |
+| **venue** | deploys your own mock ticket seller to Cloud Run |
 
 A script does all of that so everyone in the room ends up on the same rig. At
 work you would not write it, you would describe it:
 
 <aside class="positive">
-<b>⌨️ Reference Prompt</b> Ask your coding assistant instead:
-<br><br>
-<i>"Set up a Python project for Google ADK 2 on Google Cloud. Create a virtualenv and install <code>google-adk</code>. Prompt me once for a project id and remember it. Run <code>gcloud auth application-default login</code> only if I have no credentials, set the quota project, and enable these APIs: <code>aiplatform</code>, <code>run</code>, <code>cloudbuild</code>, <code>artifactregistry</code>, <code>storage</code>, <code>pubsub</code>, <code>cloudscheduler</code>, <code>cloudtrace</code>, <code>logging</code>, <code>sqladmin</code>. Write a <code>.env</code> with the project, region and model id. Make one real Gemini call so a bad project fails immediately. Every step must be safe to re-run."</i>
-<br><br>
-The last sentence is the one people leave out, and it is the one that matters when a step fails halfway and you have to run the thing again.
+<b>⌨️ Reference Prompt</b> You would not hand-write a setup script at work. You would describe it:
+<pre>Set up a Python project for building agents with Google ADK 2 on Google Cloud.
+
+Write a single setup.sh that does all of this, in order, and is safe to run
+any number of times:
+
+  1. check Python is 3.11 or newer, and stop with a clear message if not
+  2. create a .venv and install google-adk, or reuse one that exists
+  3. prompt ONCE for a Google Cloud project id, validate it with
+     `gcloud projects describe`, and remember it in ~/project_id.txt so a
+     re-clone or a shell timeout does not ask again
+  4. run `gcloud auth application-default login` ONLY if there are no
+     credentials already
+  5. set the quota project
+  6. enable these APIs, skipping any already enabled:
+     aiplatform, run, cloudbuild, artifactregistry, storage, pubsub,
+     cloudscheduler, cloudtrace, logging, sqladmin
+  7. write a .env with the project, region and model id
+  8. make one real Gemini call, so a bad project or model id fails HERE
+     rather than twenty minutes later
+  9. print a one-line summary per step, with a tick or a cross
+
+Rules:
+  - never use an API key. Vertex AI with Application Default Credentials only
+  - every step checks before it acts, so re-running repairs rather than
+    duplicates
+  - do not use ${VAR:-default} for values I want pinned; a stale export in my
+    shell must not win over the value the script sets</pre>
+<b>Check by hand:</b> step 8. A setup script that never makes a real model call will happily "succeed" against a project that cannot serve your model, and you find out in front of the room.
 </aside>
 
 <aside class="positive">
@@ -325,11 +351,32 @@ PLACEHOLDER - PICTURE
 
 
 <aside class="positive">
-<b>⌨️ Reference Prompt</b>  In Antigravity, Claude Code,  Codex or Cursor, the prompt is roughly:
-<br><br>
-<i>"Write a Google ADK 2 agent package called <code>concert</code>. <code>agent.py</code> defines <code>root_agent = Agent(name, model, instruction, tools)</code>. <code>tools.py</code> has two plain Python functions, <code>search_events(city, weekday)</code> and <code>get_seatmap(event_id)</code>, each with a docstring describing every argument, because ADK builds the tool schema from the signature and the docstring. <code>venue.py</code> is a thin httpx wrapper around a base URL from <code>VENUE_URL</code>. <code>config.py</code> reads the model id from <code>ADK_MODEL</code> and fails loudly at import if Vertex credentials are missing."</i>
-<br><br>
-Note the <b>docstrings</b>. They are not comments here, they are the tool schema the model reads. Ask for a tool without one and you get a tool the model cannot use properly.
+<b>⌨️ Reference Prompt</b> The whole agent, described rather than typed:
+<pre>Write a Google ADK 2 agent package called `concert`, as four small files.
+
+agent.py
+  root_agent = Agent(name, model, instruction, tools=[...])
+  The instruction is plain prose. Tell it to be concrete: name the show, the
+  city, the section and the price, and keep answers to two or three sentences.
+
+tools.py
+  Two plain Python functions, no decorators and no registration:
+    search_events(city: str = "", weekday: str = "") -> dict
+    get_seatmap(event_id: str) -> dict
+  Each needs a docstring with an Args: section describing EVERY argument.
+  ADK builds the tool schema the model sees from the signature and the
+  docstring, so a missing description is a missing part of the API.
+
+venue.py
+  A thin httpx wrapper around a base URL from a VENUE_URL env var.
+  Return errors as data — {"error": True, "message": ...} — never raise. A
+  tool that raises hands the model a stack trace; a tool that returns an
+  error hands it something it can explain to a person.
+
+config.py
+  Read the model id from ADK_MODEL. Fail loudly at import if Vertex
+  credentials are missing, saying exactly what to set.</pre>
+<b>Check by hand:</b> the <b>docstrings</b>. They are not comments here, they are the tool schema. And check that <code>venue.py</code> returns errors rather than raising: that is the difference between an agent that recovers and a run that dies.
 </aside>
 
 ---
@@ -393,6 +440,7 @@ Keep checking until the tickets are bought.
 """
 ```
 ```python
+# agent/concert/agent.py
 root_agent = Agent(
     name="concert",
     model=MODEL,
@@ -428,6 +476,7 @@ Now recall what `instruction=` actually is. It is a string, handed to the model 
 Do not mistake it for a daemon, a subscription, or a schedule. Nothing reads it in between turns, because in between turns nothing is reading anything.
 
 ```python
+# agent/concert/agent.py
 root_agent = Agent(
     instruction=PROACTIVE_INSTRUCTION,   # read on invocation
     ...                                  # ...and there was no invocation
@@ -596,11 +645,29 @@ So the same server also serves a page.
 
 
 <aside class="positive">
-<b>👀 ⌨️ Reference Prompt</b>  In Antigravity, Claude Code,  Codex or Cursor, the prompt is roughly:
-<br><br>
-<i>"Write a FastAPI server that exposes an ADK 2 agent over HTTP. Build one <code>Runner</code> at startup with my agent, an app name, and a SQLite session service, and reuse it for every request. Add <code>POST /wake</code> that takes <code>{\"message\": ..., \"session_id\": ...}</code>, creates the session if it does not exist, runs the agent, and returns the text it produced. Add <code>POST /session/new</code>, and serve a static <code>index.html</code> at <code>/</code>. Log each tool call on one line so I can watch it work."</i>
-<br><br>
-Note the part to check by hand: that the <code>Runner</code> is built <b>once at startup</b> and not per request. A Runner built inside the handler gets a fresh session service every call, which looks fine until the agent needs to remember something from a minute ago.
+<b>⌨️ Reference Prompt</b> The half that listens:
+<pre>Write a FastAPI server that exposes an ADK 2 agent over HTTP.
+
+Startup, once:
+  - build ONE Runner with my agent, an app name, and a session service backed
+    by SQLite at a path from an env var
+  - build the memory and artifact services the same way
+  - log which agent, which session store and which memory store, so I can see
+    what this process is actually wired to
+
+Routes:
+  POST /wake         {"message": ..., "session_id": ...}
+                     create the session if it does not exist, run the agent,
+                     return every text part it produced as a list
+  POST /session/new  return a fresh session id
+  GET  /             serve a static index.html
+
+Also:
+  - log every tool call on one line as it happens, so I can watch it work
+  - the Runner must be reused across requests, never rebuilt per request
+
+Keep it in one file, and keep anything that knows about the clock out of it.</pre>
+<b>Check by hand:</b> that the <code>Runner</code> is built <b>once at startup</b>. A Runner built inside the handler gets a fresh session service every call, which looks fine until the agent needs to remember something from a minute ago.
 </aside>
 
 ### The triggerer — something that knows the time
@@ -624,11 +691,24 @@ It is a very simple mechanism: sleep, POST, maybe repeat. Every scheduler you ha
 </aside>
 
 <aside class="positive">
-<b>👀 ⌨️ Reference Prompt</b>  In Antigravity, Claude Code,  Codex or Cursor, the prompt is roughly:
-<br><br>
-<i>"Write a small Python CLI that POSTs <code>{"message": ...}</code> to a configurable URL on a schedule. Flags: <code>--in SECONDS</code> for a one-shot delay, <code>--every SECONDS</code> to repeat, <code>--message</code>. Read the target from a <code>TRIGGER_URL</code> env var. Log each fire on one line. Handle Ctrl-C cleanly and do not crash if the target is down — log it and carry on. No agent framework dependencies."</i>
-<br><br>
-Note the part to check by hand: that the <code>Runner</code> is built <b>once at startup</b> and not per request. A Runner built inside the handler gets a fresh session service every call, which looks fine until the agent needs to remember something from a minute ago.
+<b>⌨️ Reference Prompt</b> And the half that knows the time:
+<pre>Write a small Python CLI that POSTs {"message": ...} to a configurable URL
+on a schedule.
+
+Flags:
+  --in SECONDS      fire once, after a delay
+  --every SECONDS   fire repeatedly, forever
+  --message TEXT    what to send
+
+Behaviour:
+  - read the target from a TRIGGER_URL env var
+  - log each fire on one line, with the target and the time
+  - handle Ctrl-C cleanly, without a traceback
+  - if the target is down, log it and carry on. Do not crash, and do not retry
+    in a tight loop
+
+Dependencies: standard library plus httpx. No agent framework at all.</pre>
+<b>Check by hand:</b> what the prompt does <b>not</b> mention: agents, ADK, sessions, the venue. If your description of the triggerer has to explain what an agent is, the two halves are not properly separated, and the half you throw away in the cloud will take the other half with it.
 </aside>
 
 
@@ -781,6 +861,7 @@ in an editor:
 **`note_companion`** records who is coming and what limits them:
 
 ```python
+# agent/concert/tools.py
 def note_companion(name: str, constraint: str, tool_context: ToolContext) -> dict:
     prefs = dict(tool_context.state.get("user:prefs", {}))
     prefs[name] = constraint
@@ -803,6 +884,7 @@ Add it because "Sam can't do weeknights" has to still be true next week. Write i
 **Look at what changed in `get_seatmap`.** It used to return the whole seat map. Now it saves the seat map to a file and returns a short summary:
 
 ```python
+# agent/concert/tools.py
 async def get_seatmap(event_id: str, tool_context: ToolContext) -> dict:
     seatmap = venue.get(f"/events/{event_id}/seatmap")       # about 6 KB of JSON
 
@@ -826,7 +908,7 @@ Save it to a file instead and pay one filename. Let the agent ask for the detail
 
 ### Where the file goes: the artifact service
 
-Look at the line in `get_seatmap` again:
+Look at the line in `get_seatmap` again, in `agent/concert/tools.py`:
 
 ```python
 await tool_context.save_artifact(f"seatmap_{event_id}.json", part)
@@ -863,6 +945,7 @@ To move from your laptop to Cloud Storage, change `file://` to `gs://`. (We'll s
 ADK gives you an interface for long-term memory called `BaseMemoryService`. It has two methods:
 
 ```python
+# google.adk.memory.BaseMemoryService — ADK's interface, not your file
 async def add_session_to_memory(session)                   # take a conversation in
 async def search_memory(*, app_name, user_id, query)       # hand memories back
 ```
@@ -1057,11 +1140,31 @@ When an invocation ends, ADK writes the new state to the database and strips eve
 </aside>
 
 <aside class="positive">
-<b>👀 ⌨️ Reference Prompt</b>  In Antigravity, Claude Code,  Codex or Cursor, the prompt is roughly:
-<br><br>
-<i>"In my ADK 2 agent, change <code>get_seatmap</code> so it saves the full JSON as an artifact with <code>tool_context.save_artifact</code> and returns only a short summary. Then write a <code>BaseMemoryService</code> implementation that stores memories as Markdown at <code>memory/&lt;user_id&gt;.md</code>, implementing <code>add_session_to_memory</code> and <code>search_memory</code> and returning ADK's own <code>SearchMemoryResponse</code> and <code>MemoryEntry</code> types."</i>
-<br><br>
-Note the part worth checking by hand: that it returns <b>ADK's types</b> and not its own. A memory service that returns a dict works right up until you swap it for Memory Bank.
+<b>⌨️ Reference Prompt</b> Two changes, and the second is a whole interface:
+<pre>In my ADK 2 agent:
+
+1. Change get_seatmap so it does NOT return the full seat map. Save the whole
+   JSON as an artifact with tool_context.save_artifact, and return only a
+   short summary: the event, the sections with prices and availability, and
+   the artifact filename. Everything a tool returns is added to the
+   conversation and re-sent on every later turn, so a 6 KB return value is a
+   6 KB tax for the rest of the session.
+
+2. Stash that summary in state under a key prefixed `temp:`, so a purchase in
+   the SAME turn can use it without it ever being persisted.
+
+3. Write a BaseMemoryService implementation storing memories as Markdown at
+   <root>/<user_id>.md. Implement both methods:
+       async def add_session_to_memory(session)
+       async def search_memory(*, app_name, user_id, query)
+   Return ADK's own SearchMemoryResponse and MemoryEntry types, not dicts.
+   Reads must NOT create the directory — only writes should — so a wrong path
+   fails visibly instead of reporting an empty memory. When nothing is found,
+   say which file was looked at.
+
+4. Add recall() and remember() tools over that service, keyed off a fixed
+   MEMORY_USER, not the session's user id.</pre>
+<b>Check by hand:</b> that it returns <b>ADK's types</b>. A memory service returning a dict works right up until you swap it for Memory Bank. And check that reads do not <code>mkdir</code>: that one line turns "you are reading the wrong file" into "you have no memories", which is a much harder afternoon.
 </aside>
 
 ---
@@ -1152,6 +1255,7 @@ Set both fields. ADK has no default for either.
 `budget_split` is a whole separate agent, not a tool:
 
 ```python
+# agent/concert/agent.py
 budget_split = Agent(
     name="budget_split",
     model=MODEL,
@@ -1350,18 +1454,35 @@ Now it tells you it worked:
 | **The tour**, Amsterdam Saturday | section C is down by 8 |
 | **Activity** | `ord_xxxxxxxx — 8x section C @ 95 = 760` |
 
-Form this habit now, while the stakes are a fake ticket vendor. Check the panel to find out the ticket sale.
+Form this habit now, while the stakes are a mock ticket vendor. Check the panel to find out the ticket sale.
 
 <aside class="positive">
 <b>👀 Developer's Note — a good summary is still a summary.</b> This step is often taught as "compaction loses things", and sometimes it does. The sharper problem is that it always <i>paraphrases</i>. Your agent's memory of the last twenty turns is now a piece of generated text nobody reviewed. It is usually fine. When it is not, there is no error, no log line, and nothing in the UI — the agent simply believes something slightly different from what you said.
 </aside>
 
 <aside class="positive">
-<b>👀 ⌨️ Reference Prompt</b>  In Antigravity, Claude Code,  Codex or Cursor, the prompt is roughly:
-<br><br>
-<i>"Wrap my ADK 2 <code>root_agent</code> in an <code>App</code> with <code>EventsCompactionConfig(compaction_interval=3, overlap_size=1)</code>. Then add a second agent that does budget arithmetic, give it <code>include_contents=\"none\"</code> so it sees none of the conversation, set <code>output_key</code> so its answer lands in session state, and expose it to the main agent with <code>AgentTool</code>."</i>
-<br><br>
-Note the two flags to check it actually set: <code>include_contents="none"</code> and <code>output_key</code>. Without the first you have an expensive tool. Without the second the answer sits in the conversation, where the next summary can paraphrase it.
+<b>⌨️ Reference Prompt</b> Turning on compaction, and isolating the arithmetic:
+<pre>In my ADK 2 agent:
+
+1. Wrap root_agent in an App and switch on automatic context compaction:
+       EventsCompactionConfig(compaction_interval=3, overlap_size=1)
+   Both fields are required and there is no default for either. Explain in a
+   comment what overlap_size buys, and why summarising turn 3 twice is
+   cheaper than splitting a question from its answer.
+
+2. Add a second agent that does ticket arithmetic and nothing else:
+       - include_contents="none", so it sees NONE of the conversation
+       - output_key="budget_plan", so its answer lands in session state
+         rather than loose in the transcript
+       - a description saying to call it for ANY question about totals,
+         per-seat costs, or which sections fit a budget
+   Expose it to the main agent with AgentTool.
+
+3. In the main agent's instruction, forbid doing the arithmetic itself, even
+   when the sum looks trivial. Tell it to pass the budget, the party size and
+   the sections with prices, because the sub-agent cannot see the
+   conversation. If no budget has been named yet, ask for one first.</pre>
+<b>Check by hand:</b> both flags on the sub-agent. Without <code>include_contents="none"</code> you have an expensive tool that inherits every distraction; without <code>output_key</code> the answer sits in the conversation, where the next summary is free to paraphrase it.
 </aside>
 
 ### Why `user:prefs` was the right choice
@@ -1547,6 +1668,7 @@ That distinction matters more than it looks. Replaying would mean a second `join
 Three separate things, and it is worth being clear about which does what, because they are easy to confuse.
 
 ```python
+# agent/concert/agent.py
 LongRunningFunctionTool(func=join_queue)      # the tool returns without finishing
 ResumabilityConfig(is_resumable=True)         # the run may pause and be picked up
 ```
@@ -1568,11 +1690,27 @@ ResumabilityConfig(is_resumable=True)         # the run may pause and be picked 
 </aside>
 
 <aside class="positive">
-<b>👀 ⌨️ Reference Prompt</b>  In Antigravity, Claude Code,  Codex or Cursor, the prompt is roughly:
-<br><br>
-<i>"Convert <code>join_queue</code> into an ADK 2 <code>LongRunningFunctionTool</code> that returns a ticket immediately instead of blocking, and add <code>ResumabilityConfig(is_resumable=True)</code> to the App so the run can pause on it and be resumed later. The session store must be outside the process."</i>
-<br><br>
-Note the third piece no prompt will give you: the <code>--session_service_uri</code> you pass at run time. The code can be perfect and still forget everything if the sessions live in memory.
+<b>⌨️ Reference Prompt</b> The two lines that make a pause possible:
+<pre>In my ADK 2 agent, make waiting free.
+
+1. Change join_queue so it returns IMMEDIATELY with a queue ticket instead of
+   blocking. Wrap it as a LongRunningFunctionTool.
+
+2. Add check_queue(ticket) reporting the current position and whether it is
+   ready.
+
+3. Put ResumabilityConfig(is_resumable=True) on the App, so the invocation can
+   pause on that tool and be resumed later.
+
+4. In the instruction:
+   - join the queue as soon as the show is known; a section and a price are
+     not needed to take a place in line
+   - do NOT poll check_queue in a loop
+   - never quote a queue position from memory. Call check_queue immediately
+     before stating a position and immediately before any purchase, because
+     the line moves while you talk and somebody may have skipped you forward
+   - after being woken, do not trust anything looked up before the wait</pre>
+<b>Check by hand:</b> the third thing, which no prompt will give you: the <code>--session_service_uri</code> you pass at run time. The code can be perfect and still forget everything if the sessions live in memory, and on a laptop it will look like it works.
 </aside>
 
 > **The agent was not running for those forty minutes. Something outside it
@@ -1794,6 +1932,7 @@ Derive the key from the request itself, so a retry of the *same* purchase
 produces the *same* key:
 
 ```python
+# agent/concert/tools.py
 key = hashlib.sha256(
     f"{tool_context.session.id}:{event_id}:{section}:{seats}".encode()
 ).hexdigest()[:24]
@@ -1836,11 +1975,25 @@ Check the order count. It stays at **1**.
 </aside>
 
 <aside class="positive">
-<b>👀 ⌨️ Reference Prompt</b>  In Antigravity, Claude Code,  Codex or Cursor, the prompt is roughly:
-<br><br>
-<i>"Add a <code>before_tool_callback</code> to my ADK 2 agent that runs before every <code>purchase</code> call: re-fetch the seat map, and if the section the model chose is now sold out, block the call and return an explanation instead. Also send an <code>Idempotency-Key</code> header derived from a hash of the purchase arguments, so a retry of the same purchase produces the same key."</i>
-<br><br>
-Note what makes this a gate rather than a suggestion: it is a <b>callback</b>, not an instruction. Ask for it in the prompt and the model complies most of the time. Ask for it in code and it complies every time.
+<b>⌨️ Reference Prompt</b> Two bugs, two different shapes of fix:
+<pre>In my ADK 2 agent, stop it acting on old news and stop it paying twice.
+
+1. Add a before_tool_callback that runs before EVERY purchase:
+   - re-fetch the seat map live
+   - if the chosen section now has fewer seats than requested, block the call
+     by returning a dict, and say what was believed versus what is true
+   - if the price moved, block and say so
+   - otherwise let it through
+   Returning a dict short-circuits the tool, so the purchase never reaches
+   the venue.
+
+2. Send an Idempotency-Key header on every purchase, derived from a hash of
+   the session id, event, section and seat count — so a retry of the SAME
+   purchase produces the SAME key, and a different purchase does not.
+
+3. Have the venue return the ORIGINAL order when it sees a key it has already
+   honoured, rather than creating a second one.</pre>
+<b>Check by hand:</b> that the guard is a <b>callback</b> and not a line in the instruction. Ask for it in the prompt and the model complies most of the time. Ask for it in code and it complies every time, which is the entire difference.
 </aside>
 
 > **Information goes out of date, timeline matters for long running agents.
@@ -1931,51 +2084,28 @@ Sending one is simply how `adk web` starts a run.
 Sit with that. You are typing into a chat box, and there is no conversation on
 the other side of it.
 
-👉 **Now look at the web browser.** The left panel draws the graph and colours
-in the nodes as they run. The right panel is the event stream, and it reads like
-a receipt for a decision nobody watched being made:
+👉 **Now look at the web browser.** The left panel draws the graph and colours in the nodes as they run. The right panel is the event stream, watched how the decisions are being made:
 
-| Event | What it is |
-|---|---|
-| `#10` | `get_seatmap("ms-ams-01")` — `pick_show` looking at the seats |
-| `#11` | `Artifact: seatmap_ms-ams-01.json` — the seat map saved as a file |
-| `#12` | the plan, as JSON: `{"event_id": "ms-ams-01", "section": "A", "reason": "…"}` |
-| `#13` | **`pick_show completed!`** — that node is done and will not run again |
-| `#16` | the plan again, now with `ticket: "q_3fdf9db1"`, and underneath it `State: queue_ticket, queue_event_id` |
-| `#19` | **`adk_request_input`** — *"Still in the queue at #14,203. Wake me again and I will check."* |
+![The graph, parked at check_front](img/08-01-flow5.png)
 
-Stop on two of those.
 
-In `#16`, watch `queue_up` write **`queue_ticket`** and **`queue_event_id`** into
-session state, the same two keys `join_queue` used back in Module 4. Note what
-happened: a graph node took the ticket and left it exactly where the agent's
-tools look for one.
+Watch `queue_up` write **`queue_ticket`** and **`queue_event_id`** into session state.
 
-`#19` is the pause. Not an error, not a timeout: a function call named
-`adk_request_input`, waiting for an answer that may never come.
+![The graph, parked at check_front](img/08-01-flow1.png)
 
-Then it goes quiet and the run ends.
-
-**That silence is the result, and it is easy to mistake for a failure.** Nothing
-crashed. The graph reached `check_front`, found you 14,203rd, and stopped. Look
+You should see a function call named `adk_request_input`, waiting for an answer. Then it goes quiet and the run ends. The graph reached `check_front`, found you 14,203rd, and stopped. Look
 for a process holding your place and find none.
 
 👉 Check the **venue panel**: one queue ticket, and nothing running.
+
+![The graph, parked at check_front](img/08-01-flow6.png)
 
 #### 3. Wake it up — and mind which box you type in
 
 Scroll the event stream to the last event, **`adk_request_input`**. Do not read
 it as a log line. Look for the input box of its own:
 
-```
-⚡ adk_request_input
-
-   Still in the queue at #14,203. Wake me again and I will check.
-
-   ┌──────────────────────────────┐
-   │ Enter your response...       │  ➤
-   └──────────────────────────────┘
-```
+![The graph, parked at check_front](img/08-01-flow7.png)
 
 **There are now two places you can type, and they do different things.**
 
@@ -2006,98 +2136,34 @@ Press **RESET THE VENUE** and start the step over.
 dropped a little because the venue's clock kept running while nothing of yours
 did.
 
+![Woken once, and still one ticket](img/08-01-flow2.png)
+
 #### 4. Get to the front, then finish
 
 👉🔴 Press **SKIP THE WAIT** on the venue panel.
 
-👉✨ Answer the newest `adk_request_input` event one last time — again in **its**
-box, not the chat box.
+![The finished graph, every node green](img/08-01-flow3.png)
 
-This time watch `check_front` find you at the front and fall through. Watch the
-left panel light up `brief` and `concert`, the last two nodes that had never run.
+👉✨ Answer the newest `adk_request_input` event one last time — again in **its** box, not the chat box.
+![The finished graph, every node green](img/08-01-flow4.png)
 
+This time watch `check_front` find you at the front and fall through. Watch the left panel light up `brief` and `concert`, the last two nodes.
 
+![The finished graph, every node green](img/08-01-flow8.png)
 
 👉 **And look at the browser.** This is the run finishing, and there are four
 things in it worth reading.
 
-**The graph is fully green, and the edges are counted.** `brief` and `concert`
-have lit up — the two nodes that had never run. And the edges into `pick_show`,
+![The finished graph, every node green](img/08-01-flow9.png)
+
+
+**The graph is fully green, and the edges are counted.** `brief` and `concert` have lit up — the two nodes that had never run. And the edges into `pick_show`,
 `queue_up` and `check_front` now carry a badge:
 
-```
-        START
-          │
-    open_the_night
-          │  3x
-      pick_show
-          │  3x
-       queue_up
-          │  3x
-     check_front
-          │
-        brief          ← ran once, just now
-          │
-       concert         ← ran once, just now
-```
-
-**`3x` is the number of times the graph walked that edge, once per wake-up.** The
-three at the top are the price of resuming: the scheduler re-enters the graph from
-the beginning each time. It does *not* mean the work happened three times, and the
-venue panel is the proof: one queue ticket, not three.
-`@node(rerun_on_resume=False)` is why.
-
-**The header still says `Invocation: #1 (go)`.** Forty-eight events,
-three messages, one invocation. That single number is the whole claim of this
-step: you did not have three conversations, you had one that stopped twice.
 
 
+**`2x` is the number of times the graph walked that edge, once per wake-up.** The 2 at the top are the price of resuming: the scheduler re-enters the graph from the beginning each time. It does *not* mean the work happened three times, and the venue panel is the proof: one queue ticket, not 2. `@node(rerun_on_resume=False)` is why.
 
-**`#36` is the hand-off**, and it is the sentence you never typed:
-
-```
-"You are at the front of the queue for ms-ams-01 in Amsterdam. The plan is
-2 seats in section A, chosen because: This show is a weekend performance in
-Amsterdam, matching the user's preference, and Section A is within budget,
-avoiding the previously disliked Section B at Ziggo Dome...
-
-Buy them now. The seat map you are working from is forty minutes old, so
-read it again first — if that section has gone, take the best remaining one
-under $250 a seat..."
-```
-
-That is `brief`, a nine-line function, writing the prompt a person would have
-written. Everything after it is `buyer_agent` doing what it has always done.
-
-**Then it just works:**
-
-| Event | |
-|---|---|
-| `#40` | `recall` — it checks who this is for, unprompted |
-| `#41` | `get_seatmap("ms-ams-01")` — reading the seat map again, because the one in the plan is forty minutes old |
-| `#42` | the seat map saved as an artifact |
-| `#43-44` | `purchase`, and `State: last_order` written |
-| `#45` | *"Good morning! I've secured 2 tickets in Section A for the Amsterdam show, costing $210 each for a total of $420."* |
-| `#46` | `concert completed!` |
-| `#48` | `concert_nightly completed!` — the graph is done |
-
-Spot `get_seatmap` before `purchase` with nobody asking for it, and recognise
-`fence.py` from step 7, still doing its job inside a graph that knows nothing
-about it.
-
-👉 Check the **venue panel** one more time:
-
-| | |
-|---|---|
-| **Tickets bought** | 1 |
-| queue tickets | **1** |
-| messages you sent | 3 |
-| invocations | **1** |
-
-**One order and one ticket, across three separate runs.** Between them, nothing
-of yours existed.
-
-Now you have watched it, go back and read what you were looking at.
 
 ### The graph
 
@@ -2113,6 +2179,7 @@ START ─► open_the_night ─► pick_show ─► queue_up ─► check_front 
 ```
 
 ```python
+# agent/concert/nightly.py
 nightly = Workflow(
     name="concert_nightly",
     edges=[(START, open_the_night, pick_show, queue_up,
@@ -2120,8 +2187,7 @@ nightly = Workflow(
 )
 ```
 
-**Note that two nodes are agents and two are functions, and treat which is which
-as the whole design question.**
+**Note that two nodes are agents and two are functions, and treat which is which as the whole design question.**
 
 | Node | Why that shape |
 |---|---|
@@ -2133,6 +2199,7 @@ as the whole design question.**
 Look at the last node and find the agent you built. Not a copy, not a rewrite:
 
 ```python
+# agent/concert/nightly.py
 from .agent import buyer_agent
 ```
 
@@ -2144,14 +2211,15 @@ idempotency key in `purchase`. There is only one of it.
 Here is the version nobody should write:
 
 ```python
+# what NOT to write — this is nobody's file
 while not ready:          # never do this
     time.sleep(1)
 ```
 
-It keeps a process alive for forty minutes to achieve nothing, dies with the
-terminal, and cannot be resumed. Here is what `check_front` does instead:
+It keeps a process alive for forty minutes to achieve nothing, dies with the terminal, and cannot be resumed. Here is what `check_front` does instead:
 
 ```python
+# agent/concert/nightly.py — check_front
 if not status["ready"]:
     return RequestInput(message=f"Still at #{position}. Wake me and I'll check.")
 ```
@@ -2164,11 +2232,29 @@ invocation goes to the session store, and the process is free to exit.
 </aside>
 
 <aside class="positive">
-<b>👀 ⌨️ Reference Prompt</b>  In Antigravity, Claude Code,  Codex or Cursor, the prompt is roughly:
-<br><br>
-<i>"Rewrite this unattended flow as an ADK 2 <code>Workflow</code> graph. Steps that must be identical every time are function nodes; steps needing judgement are agent nodes. The queue wait is a node that returns <code>RequestInput</code> rather than sleeping, so the run parks and the process can exit. Put <code>rerun_on_resume=False</code> on anything with a side effect, and make my existing agent the final node, unchanged."</i>
-<br><br>
-Note the line that does the real work: <code>rerun_on_resume=False</code>. Leave it off the queue node and every wake-up takes a fresh ticket, sending you back behind fourteen thousand people.
+<b>⌨️ Reference Prompt</b> Turning a conversation into something that runs unattended:
+<pre>Rewrite this flow as an ADK 2 Workflow graph, for a run with nobody watching.
+
+Nodes, in order:
+   open_the_night   function. Says the sentence a person would have said,
+                    because an agent node cannot be first: it responds to its
+                    input, and at START there is nothing to respond to
+   pick_show        agent. Judgement, with an output_schema
+   queue_up         function. Takes exactly one queue ticket
+   check_front      function. Returns RequestInput when not ready
+   brief            function. Writes the prompt for the last node
+   buyer_agent      my existing agent, imported and unchanged
+
+Rules:
+  - steps that must be identical every time are function nodes; steps needing
+    judgement are agent nodes
+  - the wait is a node returning RequestInput, NOT a sleep loop. The run
+    parks, the invocation is written to the session store, and the process
+    may exit
+  - put rerun_on_resume=False on anything with a side effect, especially
+    queue_up. Every wake-up re-enters the graph from the start
+  - do not rewrite my agent. Import it and make it the last node</pre>
+<b>Check by hand:</b> <code>rerun_on_resume=False</code> on the queue node. Leave it off and every wake-up takes a fresh ticket, sending you back behind fourteen thousand people. The run gets further from finishing each time it resumes.
 </aside>
 
 > **The run costs nothing while it waits, and it ends in exactly one place:
@@ -2189,17 +2275,10 @@ Note the line that does the real work: <code>rerun_on_resume=False</code>. Leave
 > you and get a plain yes — and then store it somewhere the conversation cannot
 > reach.
 
-How much of your credit card would you hand this thing while you sleep?
+How much of your credit card would you hand this thing while you are gone?
 
-Now listen to how you would actually say it. *"About a hundred for the cheap
-seats. Two-fifty if they're the good ones — and I'd go higher for a Saturday."*
-That is one decision with three numbers and two conditions in it, and none of it
-was phrased as an instruction. Put an agent in front of that and it has to pick something, and
-whatever it picks is what it spends at 3am when you are not there to be asked
-again.
+Messages could be confusing since your previous conversation could contain mix messages, and it's always best to confirm with user on how much they want to spend ultimatly on the tickets to make the final call. So now we'll let the agent introduce that absolute approval from human, and confirm before sets of the agent <- correct my english. 
 
-So end on a confirmation rather than a question: **this is what I understood,
-yes or no.**
 
 👉🔴 On the **venue panel**, press **RESET THE VENUE**. Every step starts from
 the same world: 8 shows, all seats available, clock at 1×.
@@ -2226,14 +2305,11 @@ What changed since the last step:
 
 | File | What changed |
 |---|---|
-| `budget.py` | new, and about ten lines of actual code |
-| `tools.py` | added `set_budget`. `join_queue` and `check_queue` are **back** — this step is a conversation again, so the agent does its own queueing |
-| `agent.py` | `root_agent` is the **conversation** again, not the graph |
-| `nightly.py` | `agree_budget` captures the budget **and** the rest of the ask, both as free text. `SEATS` as a constant is gone |
+| `budget.py` | Holds what the person agreed, as the sentence they said. `load()` reads it out of state, and `someone_is_there()` answers whether anybody is around to be asked |
+| `tools.py` | added `set_budget`, so the agent can write an agreed limit into session state once a person has confirmed it |
+| `nightly.py` | a new first node, `agree_budget`, which asks and reads back before anything else runs. It captures the budget **and** the rest of the ask, both as free text, and `SEATS` as a constant is gone |
 
-<aside class="positive">
-<b>👀 Developer's Note — <code>root_agent</code> moved back, and why the graph is still there.</b> Step 8 made the graph the root because nobody was typing. This step is a person agreeing something, and you cannot have that conversation with a graph — so <code>adk web</code> serves the conversation again. <code>nightly.py</code> has not gone anywhere, and beat 5 is where the two halves meet. Step 10 makes the graph the root for good.
-</aside>
+
 
 ### Don't model it. Store the sentence.
 
@@ -2245,46 +2321,28 @@ def load(state) -> str:
     return str(state.get("budget") or "")
 ```
 
-That is deliberate, and it is the argument of the step.
-
-The tempting design is a schema. One number, `{"max_per_seat": 250}`, which breaks
-the first time somebody prices the good seats differently. So you go to one number
-per tier, which breaks the first time somebody says *"and I'd go higher for a
-Saturday"*. Then you need a weekday dimension. Then a per-city one. Then *"not
-more than $400 total, whatever you do"*.
-
-**Every schema you write is a bet about what people are allowed to care about,
-and you lose that bet in the first conversation.** Reading an ambiguous sentence
-and applying it is something models are good at and schemas are not. So store the
-words:
 
 ```
 state["budget"] = "up to $100 for the upper bowl or general admission, up to
                    $250 for the lower bowl, and up to $300 for a Saturday show"
 ```
 
-Stop looking at the shape. Look at the two things that matter: **the person said
-it** and **they confirmed it**. Keep it in session state rather than under
-`user:`, on purpose. Agree a budget for one booking, and remember "two-fifty if
-they're the good ones" was about that band, that night. Put it under `user:` and
-watch it quietly govern every run this person ever makes, including the ones
-where they would have said something different, without ever asking again.
+The node checks two things... that **the person said it**, and that **they confirmed it**.
+
+Then it keeps the sentence in session state rather than under `user:`, on purpose. A budget is agreed for one booking. "$250 if they're the good ones" was said about that band, on that night, and it has no business governing ticket booking.
 
 ### The same is true of everything else they said
 
-Do not stop at the budget. A person tells you more than that, and it would be
-strange to store one sentence faithfully and turn the rest into fields.
+Do not stop at the budget. People change their minds while they are deciding, so
+capture everything they ask for here rather than relying on what the agent
+happens to remember.
 
 ```
 "I live in NYC, I can only do weekends, I have 10 people coming with me"
 ```
 
-Model that and you owe yourself a city, a day-of-week rule, and a party size.
-Then let somebody say *"ten of us, but two might drop out"*, or *"anywhere on
-the east coast"*, and watch every field go wrong at once. So keep that sentence
-too:
-
-```python
+```python 
+# agent/concert/nightly.py
 def what_they_asked_for(ctx) -> str:
     """Everything this person typed, joined, in their own words."""
     said = []
@@ -2298,25 +2356,18 @@ def what_they_asked_for(ctx) -> str:
     return "\n".join(said)
 ```
 
-Note `agree_budget` calls it on **every** run, not just the first, so a
-correction typed while the agent is queueing lands too. Then watch
-`open_the_night` hand the picker both sentences, the ask and the budget, and the
+Read **Only events the user authored** it looks at **Only `text` parts** from the `function_response`, so the budget question and answer do not get echoed back in here. **No duplicates**.
+
+Note `agree_budget` calls it on **every** run, not just the first, so a correction typed while the agent is queueing lands too. Then  `open_the_night` hand the picker both sentences, the ask and the budget, and the
 picker read them.
 
-<aside class="negative">
-<b>⚠️ Only <code>text</code> parts count, and that is doing real work.</b> An answer to an interrupt arrives as a <code>function_response</code>, not as text. So the budget question and answer do not get echoed back into the ask, and what is left is the things the person freely chose to say.
-</aside>
-
-<aside class="positive">
-<b>👀 Developer's Note — what this replaced.</b> This node used to hand the picker a constant, <code>SEATS = 2</code>, and nothing else. It worked in rehearsal because two is what you test with. The first time somebody typed <i>"I have 10 people coming with me"</i> it bought two seats and explained, quite reasonably, that they were within budget. <b>Nothing errored.</b> A hardcoded default that happens to match your demo is the hardest kind of bug to see, and the only reason it surfaced was somebody booking for a party instead of a couple.
-</aside>
 
 ### The graph, one node longer
 
-Compare step 8's graph, which started at the show. Start this one with a
-conversation:
+Let's start this one with a conversation:
 
 ```python
+# agent/concert/nightly.py
 nightly = Workflow(
     name="concert_nightly",
     edges=[(START, agree_budget, open_the_night, pick_show, queue_up,
@@ -2328,7 +2379,7 @@ nightly = Workflow(
    START
      │
      ▼
-   agree_budget      ← asks, reads back, stores both sentences   [ NEW ]
+   agree_budget      ← asks, reads back, stores the ask AND the budget  [ NEW ]
      │
      ▼
    open_the_night    ← hands the picker the ask and the budget
@@ -2350,59 +2401,43 @@ nightly = Workflow(
    buyer_agent       agent   · spends the money
 ```
 
-**Two nodes stop and wait, and they are the same mechanism.** `check_front`
-waits for a venue and is answered by a clock. `agree_budget` waits for a person
-and can only be answered by a person. That difference is the whole of step 10.
+**Two nodes stop and wait, and they are the same mechanism.** `check_front` waits for a venue and is answered by a clock. `agree_budget` waits for a person and can only be answered by a person. That difference is the whole of step 10.
 
 ### Run it — step by step
 
-Do everything in **`concert`**, which is now the graph. Do not leave `adk web`.
 
 #### 1. Start it
 
-👉 Reload **localhost:8000** and pick `concert`.
+👉 Reload **localhost:8000** and pick `concert` agent.
 
-👉✨ Type anything at all:
-
-```
-go
-```
-
-The word is ignored, because this graph has no user to read. Sending a message is
-simply how `adk web` starts a run.
-
-👉 Terminal 1:
+👉✨ Ask for what you actually want:
 
 ```
-[agree_budget] nothing agreed yet. Asking.
+Get us two tickets to the Amsterdam show.
 ```
+
+![The run stops and asks what you will spend](img/09-01-hitl1.png)
+
+In step 8 the graph had no user, so whatever you typed was thrown away and `go` did as well as anything. Here `agree_budget` calls `what_they_asked_for(ctx)` on its very first line, which collects everything you have typed and puts it in `state["request"]`. Then `open_the_night` hands it to the picker alongside the budget.
+
+You did not name a day, and Amsterdam has two shows. So watch the picker fall
+back to `recall()` for that, find *"Sam bails on weeknights"*, and take the
+Saturday.
+
 
 And in the browser, the run **stops** on an `adk_request_input` event:
 
-```
-⚡ adk_request_input
-
-   Before I book anything: what are you willing to spend? Say it however you
-   like — a different price for the good seats, more for a weekend, a total
-   you will not go past.
-
-   ┌──────────────────────────────┐
-   │ Enter your response...       │  ➤
-   └──────────────────────────────┘
-```
-
-**A graph just asked you a question.** Same interrupt as the queue wait in step
-8, pointed at a person instead of a venue.
+**A graph just asked you a question.** Same interrupt as the queue wait in step 8, but it now pointed at a person to answer the question.
 
 #### 2. Answer the way people actually answer
 
 👉✨ In the **`Enter your response...`** box — not the chat box at the bottom:
 
 ```
-About a hundred for the cheap seats. Two-fifty if they're the good ones.
+About a 100 for the cheap seats. 250 if they're the good ones.
 ```
 
-Do not expect it to take that and run. Watch it stop again:
+Watch it stop and confirming:
 
 ```
 [agree_budget] reading back: About a hundred for the cheap seats. Two-fifty
@@ -2413,8 +2448,7 @@ Do not expect it to take that and run. Watch it stop again:
    ones. Have I got that right?
 ```
 
-**Two interrupts, not one, and the second is the point.** The first answer is
-what somebody said. The second is what they agreed to.
+![It reads the number back before it commits](img/09-01-hitl2.png)
 
 <aside class="negative">
 <b>⚠️ Answer in the box on the event, not the chat box.</b> The chat box starts a new invocation, which runs the graph from the top and asks you the same question again. Everything below depends on getting this right.
@@ -2438,25 +2472,21 @@ Yes, that's right.
 [check_front]  #14,203 — not yet. Pausing.
 ```
 
-Four nodes ran off one word. 👉 Open the **State** tab and find **`budget`** —
-your sentence, verbatim.
+Four nodes ran off one word. 👉 Open the **State** tab and find **`budget`** — your sentence, verbatim.
 
-**No prefix.** That is session state, and it is a decision worth making on
-purpose: start a **New Session** and the budget is gone, so it asks you again.
+![`budget` in the State tab, in your own words](img/09-01-hitl3.png)
 
-Agree a budget for *this* booking, not for every booking you will ever make.
-Remember "two-fifty if they're the good ones" was about that band, that night.
-Put it under `user:` and watch it quietly govern every run you ever do, including
-the ones where you would have said something different, without ever asking
-again.
+**No prefix.** That is session state, and it is a decision worth making on purpose if you start a **New Session** and the budget will be gone, so it will asks you again.
 
 <aside class="positive">
-<b>👀 Developer's Note — the cost of that choice.</b> An unattended run gets a fresh session, so it has no budget agreed and falls back to the default in <code>nightly.py</code>. That is the honest trade: a limit that has to be re-agreed each time, against a limit that outlives the conversation it came from. Module 3 taught you the four places a fact can live; this is what it looks like to pick one on purpose rather than by habit.
+<b>👀 Developer's Note — the cost of that choice.</b> An unattended run gets a fresh session, so it has no budget agreed and falls back to the default in <code>nightly.py</code>. That is a limit that has to be re-agreed each time, against a limit that outlives the conversation it came from. 
 </aside>
 
 #### 4. Get to the front and finish
 
 👉🔴 Press **SKIP THE WAIT** on the venue panel.
+
+
 
 👉✨ Answer the newest `adk_request_input` — again in **its** box:
 
@@ -2464,17 +2494,11 @@ again.
 go
 ```
 
-```
-[check_front] at the front
-[buy_it]      calls get_seatmap
-[buy_it]      calls purchase
-```
+![Woken again, and it does not ask twice](img/09-01-hitl4.png)
 
-👉 Check the **venue panel**: one order, at a price inside what you agreed for
-that kind of seat.
+👉 Check the **venue panel**: one order, at a price inside what you agreed for that kind of seat.
 
-**Which section it takes will vary.** Watch it rather than scripting it. A, B and C are all defensible against what you said. Nothing in the
-code compared those prices — the agent read your sentence and decided.
+![One order, inside what you agreed](img/09-01-hitl5.png)
 
 <aside class="negative">
 <b>⚠️ Watch whether it respects the memory file too.</b> <code>memory/userx.md</code> says this person could not see a thing from the upper bowl at Ziggo Dome — so section B is a defensible price and a bad seat. Sometimes it takes B anyway. That is not a bug in the budget; it is the honest cost of leaving a decision to a model, and it is the most useful thing on the screen if it happens. Ask it why it chose that section.
@@ -2524,16 +2548,35 @@ START ─► agree_budget ─► open_the_night ─► pick_show ─► queue_up
 
 It is step 8's graph with one node in front. Nothing else moved.
 
-<aside class="positive">
-<b>👀 Developer's Note — <code>root_agent</code> is still the graph.</b> Step 8 put the graph in charge because nobody was typing. That did not have to mean nobody <i>can</i> type — <code>agree_budget</code> stops the run and asks a real person a real question. So the root does not flip back to the chat agent here, and <code>buyer_agent</code> stays what it has been since step 8: the last node, unchanged.
-</aside>
+
 
 <aside class="positive">
-<b>👀 ⌨️ Reference Prompt</b>  In Antigravity, Claude Code,  Codex or Cursor, the prompt is roughly:
-<br><br>
-<i>"Add a first node to my ADK 2 <code>Workflow</code> that agrees a spending limit with a person before anything else runs. It must ask, read the answer back, and wait for confirmation, using <code>@node(rerun_on_resume=True)</code>, a stable <code>interrupt_id</code>, and <code>ctx.resume_inputs[interrupt_id]</code> to read the reply. Store what they said as free text in session state, not as a schema."</i>
-<br><br>
-Note the three things that have to be true together, because missing any one produces the same symptom: it asks forever. Rerun on resume, a stable id, and reading the answer from <code>resume_inputs</code> rather than from the return value.
+<b>⌨️ Reference Prompt</b> Putting a person inside an unattended graph:
+<pre>Add a first node to my ADK 2 Workflow that agrees a spending limit with a
+person before anything else runs.
+
+It must:
+  - ask what they are willing to spend, in their own words
+  - read the answer back and wait for confirmation before storing it
+  - treat a correction as the new answer, not as a refusal
+  - store what they said as FREE TEXT in session state, never as a schema.
+    "About a hundred for the cheap seats, two-fifty if they're good, and I'd
+    go higher for a Saturday" is one decision with three numbers and two
+    conditions in it, and every field you invent is a bet you lose in the
+    first conversation
+  - collect everything else the person typed the same way, and hand it to the
+    picker alongside the budget
+
+Three things must be true together, or it asks forever:
+  @node(rerun_on_resume=True)          run again each time the graph is woken
+  a STABLE interrupt_id                not the random default
+  ctx.resume_inputs[interrupt_id]      where the answer actually arrives —
+                                       NOT the return value of RequestInput
+
+And it must know whether anybody is there to answer. Make that a property of
+the REQUEST, not of the process: a browser has a person behind it, a
+scheduler does not, and the same deployed service handles both.</pre>
+<b>Check by hand:</b> the third of those three. ADK iterates a generator node rather than sending into it, so nothing comes back from <code>yield RequestInput</code>. Read the answer from <code>ctx.resume_inputs</code>, or watch it ask the same question for ever.
 </aside>
 
 > **The agreement came from the person, they confirmed it out loud, and it dies
