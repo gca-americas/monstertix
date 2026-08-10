@@ -97,7 +97,7 @@ rm -rf agent/concert
 cp -r "$MATCH/concert" agent/
 find agent -name __pycache__ -type d -exec rm -rf {} + 2>/dev/null || true
 
-# From Module 6 on there is a second package — the nightly workflow, served as
+# From step 8 on there is a second package — the nightly workflow, served as
 # its own app so `adk web` and Pub/Sub can both address it by name.
 EXTRA=""
 if [ -d "$MATCH/nightly" ]; then

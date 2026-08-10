@@ -44,6 +44,13 @@ from .tools import (
 budget_split = Agent(
     name="budget_split",
     model=MODEL,
+    # The description is what the MAIN agent reads when deciding whether to call
+    # this. A vague one and it does the sums itself, which is the whole point of
+    # the step going quietly missing.
+    description=(
+        "Works out ticket costs. Call this for ANY question about totals, "
+        "per-seat costs, or which sections fit a budget."
+    ),
     include_contents="none",
     instruction="""
 You do ticket arithmetic and nothing else.

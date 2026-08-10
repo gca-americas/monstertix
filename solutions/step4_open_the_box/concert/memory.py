@@ -64,8 +64,17 @@ class MarkdownMemoryService(BaseMemoryService):
     def __init__(self, root: str | pathlib.Path):
         self.root = pathlib.Path(root)
 
-    def _path(self, user_id: str) -> pathlib.Path:
-        self.root.mkdir(parents=True, exist_ok=True)
+    def _path(self, user_id: str, *, for_writing: bool = False) -> pathlib.Path:
+        """Where this user's memory lives.
+
+        Only creates the directory when something is about to be written. It
+        used to mkdir on every call, including reads, which silently produced an
+        empty `memory/` wherever the process happened to be running and then
+        reported "nothing remembered yet" — the same answer you get when the
+        memory really is empty, and impossible to tell apart.
+        """
+        if for_writing:
+            self.root.mkdir(parents=True, exist_ok=True)
         return self.root / f"{user_id}.md"
 
     async def add_session_to_memory(self, session: Session) -> None:
@@ -133,7 +142,16 @@ async def recall() -> dict:
         app_name="concert", user_id=MEMORY_USER, query=""
     )
     if not response.memories:
-        return {"memory": "", "note": "nothing remembered yet"}
+        # Say WHICH file was missing. "nothing remembered yet" on its own is
+        # indistinguishable from reading the wrong path, and MEMORY_USER is easy
+        # to have left set to something stale in a shell.
+        looked_at = memory_service._path(MEMORY_USER)
+        return {
+            "memory": "",
+            "note": f"nothing remembered yet — no file at {looked_at}",
+            "looked_at": str(looked_at.resolve()),
+            "memory_user": MEMORY_USER,
+        }
 
     entry = response.memories[0]
     return {
@@ -154,7 +172,7 @@ def remember(fact: str) -> dict:
     Returns:
         Confirmation and the file written to.
     """
-    path = memory_service._path(MEMORY_USER)
+    path = memory_service._path(MEMORY_USER, for_writing=True)
     existing = path.read_text() if path.exists() else f"# Memory — {MEMORY_USER}\n"
     if "## Preferences" not in existing:
         existing += "\n## Preferences\n"

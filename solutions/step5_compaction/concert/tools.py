@@ -49,6 +49,18 @@ async def get_seatmap(event_id: str, tool_context: ToolContext) -> dict:
     """
     seatmap = venue.get(f"/events/{event_id}/seatmap")
 
+    # The venue returns errors as data, so check before indexing into it. A
+    # model that invents an event id — ms-tko-01 for Tokyo, when the real one is
+    # ms-tyo-01 — gets a 404 here, and without this guard the KeyError below
+    # takes down the whole run instead of letting the agent look the id up.
+    if seatmap.get("error"):
+        return {
+            "error": True,
+            "event_id": event_id,
+            "message": f"no show with id {event_id!r}. "
+                       "Call search_events to get the real ids, and use one of those.",
+        }
+
     # The full map is bulky and mostly noise to the model. Park it as a file
     # and hand back a filename.
     part = types.Part(

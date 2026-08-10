@@ -49,9 +49,18 @@ def test_without_a_key_the_retry_buys_twice(venue):
 
 @needs_model
 def test_it_re_reads_the_seatmap_after_the_wait(venue):
+    """It must look at the seat map again before buying, not trust the old one.
+
+    The queue has to be genuinely advanced, not merely claimed in a message. The
+    agent is told never to quote or act on a queue position it has not just
+    checked, so telling it "you're at the front" while it sits at 14,203 gets
+    the correct answer — a refusal — and never reaches the seat map at all.
+    """
     m = load_step("step7_old_news")
     t = drive(m.root_agent, [
         "Get us two tickets to the Amsterdam show.",
+        venue.skip_the_wait,                   # actually move it to the front
         "You're at the front now — go ahead.",
     ])
+    assert "join_queue" in t.calls, "it should take a queue ticket first"
     assert t.calls.count("get_seatmap") >= 1, "it must look again before buying"

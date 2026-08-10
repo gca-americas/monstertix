@@ -201,45 +201,6 @@ second. Currently **38 passing, 10 skipped**.
 
 ---
 
-## Design decisions
-
-**Why the concert booker.** Earlier candidates: an expense approver (no
-consequential action), a sourdough coach (the agent cannot act — its only
-actuator is a notification), a CI bot (too hardcore), a trip booker (too common).
-The concert booker is the only one where the agent must act *while the human is
-unavailable*, which is what forces the agreed-budget pattern.
-
-**Why each student deploys their own venue.** A shared one means the moment
-somebody presses **SELL THE GOOD SEATS**, everyone else's agent fails for no
-visible reason. Half this workshop is deliberately breaking things, so isolation
-is not optional. It also gets `gcloud run deploy` in front of them early, so the
-final step's deploy is familiar.
-
-**Why the agent stays local until step 10.** Students edit it at every step. Nine
-deploys would cost twenty minutes of a two-hour workshop.
-
-**Why the weeknight shows are cheaper and listed first.** They are the trap. The
-cheapest, earliest, most available option is the wrong answer for somebody whose
-friend never turns up on a weeknight, and the only thing standing between the
-agent and that mistake is a memory file it wrote last time.
-
-**Why Vertex and ADC rather than an API key.** It makes the last step's diff
-honest: the credential model is identical on a laptop and on Cloud Run, so the
-swap table has nothing to say about auth.
-
-**Why SQLite for sessions.** `sqlite3 sessions.db "select * from events"` puts a
-session on screen as rows. Cloud SQL through a proxy never feels that direct.
-
-**Why Cloud Run and not Agent Runtime for step 10.** Agent Runtime cannot receive
-scheduled or event-driven triggers. This is not a preference.
-
-**Why `seed()` upserts.** Anyone who ran an earlier version of this workshop has
-a `venue.db` with the old dates and prices, and `INSERT OR IGNORE` would leave
-them there for ever, with no error and nothing on screen to explain why their
-agent is reasoning about numbers nobody else can see.
-
----
-
 ## For instructors
 
 - **[`docs/INSTRUCTOR.md`](docs/INSTRUCTOR.md)** — timing, what breaks, what to

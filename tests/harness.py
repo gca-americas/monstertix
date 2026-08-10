@@ -133,6 +133,20 @@ class Transcript:
         return f"<calls={self.calls} said={len(self.said)} interrupts={len(self.interrupts)}>"
 
 
+def _next_message(queue):
+    """Pop the next user message, running any callables that precede it.
+
+    A turn list may contain a zero-argument callable. It is not sent to the
+    agent — it runs, and the next string is sent instead. That is how a test
+    presses a button on the venue between two turns: `venue.skip_the_wait` has
+    to actually happen, because an agent that is told it is at the front while
+    the queue says otherwise is supposed to disbelieve you.
+    """
+    while queue and callable(queue[0]):
+        queue.pop(0)()
+    return queue.pop(0) if queue else None
+
+
 def drive(node, turns, *, session_state=None, venue=None, on_interrupt=None):
     """Run `node` through `turns`, answering interrupts as they come.
 
@@ -169,8 +183,9 @@ def drive(node, turns, *, session_state=None, venue=None, on_interrupt=None):
                   else Runner(agent=node, **kwargs))
 
         queue = list(turns)
-        msg = (types.Content(role="user", parts=[types.Part(text=queue.pop(0))])
-               if queue else None)
+        first = _next_message(queue)
+        msg = (types.Content(role="user", parts=[types.Part(text=first)])
+               if first is not None else None)
 
         for _ in range(20):
             interrupt, asked = None, ""
@@ -199,9 +214,10 @@ def drive(node, turns, *, session_state=None, venue=None, on_interrupt=None):
                     parts=[create_request_input_response(interrupt, {"result": answer})])
                 continue
 
-            if not queue:
+            nxt = _next_message(queue)
+            if nxt is None:
                 return
-            msg = types.Content(role="user", parts=[types.Part(text=queue.pop(0))])
+            msg = types.Content(role="user", parts=[types.Part(text=nxt)])
 
     asyncio.run(run())
     return t

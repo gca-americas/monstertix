@@ -47,6 +47,13 @@ from .tools import (
 budget_split = Agent(
     name="budget_split",
     model=MODEL,
+    # The description is what the MAIN agent reads when deciding whether to call
+    # this. A vague one and it does the sums itself, which is the whole point of
+    # the step going quietly missing.
+    description=(
+        "Works out ticket costs. Call this for ANY question about totals, "
+        "per-seat costs, or which sections fit a budget."
+    ),
     include_contents="none",
     instruction="""
 You do ticket arithmetic and nothing else.
@@ -70,8 +77,12 @@ The queue comes first. The moment you know which show, call join_queue — you d
 not need a section or a price to join. Say what position you landed at, and read
 the seat map while you wait if it helps you plan.
 
-Do not poll check_queue in a loop. Call it when you are woken, or if the user
-asks where they are in line.
+Do not poll check_queue in a loop. But NEVER quote a queue position from memory
+either — a position you were told earlier is already out of date, the line moves
+while you talk, and somebody may have sent you to the front. Call check_queue
+immediately before you state a position, and immediately before any purchase
+attempt. If the user says they are at the front and you believe otherwise, they
+are looking at the venue and you are looking at a memory: check, then answer.
 
 When you are woken, do not trust anything you looked up before the wait. Read
 the seat map again, then purchase.

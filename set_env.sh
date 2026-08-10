@@ -41,8 +41,12 @@ fi
 
 export VENUE_URL="${VENUE_URL:-http://127.0.0.1:8080}"
 export AGENT_URL="${AGENT_URL:-http://127.0.0.1:8000}"
-export MEMORY_DIR="${MEMORY_DIR:-$_root/memory}"
-export MEMORY_USER="${MEMORY_USER:-userx}"
+# Hardcoded, not defaulted. `${MEMORY_USER:-userx}` politely keeps whatever is
+# already in the shell, so anyone who exported an old value once kept it through
+# every restart — and a wrong value does not error, it just reads a file that is
+# not there and reports an empty memory.
+export MEMORY_DIR="$_root/memory"
+export MEMORY_USER="userx"
 
 echo "  folder   $WORKSHOP"
 echo "  project  $GOOGLE_CLOUD_PROJECT"

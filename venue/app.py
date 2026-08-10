@@ -496,14 +496,33 @@ def advance_queue():
 
 @app.post("/admin/sellout")
 def sell_out(payload: dict = Body(...)):
-    """MODULE 4 — make the agent's snapshot a lie, on cue."""
-    event_id = payload.get("event_id")
+    """Step 7 — make the agent's snapshot a lie, on cue.
+
+    Sells out a section across EVERY show in a city, not one event. Picking a
+    single event meant picking a row out of the tour listing, and the moment the
+    listing was reordered — weeknights first — the button emptied the Tuesday
+    show while the agent was queued for the Saturday one. Nothing errored, the
+    agent's purchase simply went through, and the whole demo quietly stopped
+    working.
+    """
     section = payload.get("section", "A")
-    if not event_id:
-        raise HTTPException(400, "event_id required")
-    run("UPDATE sections SET sold=total WHERE event_id=? AND section=?", (event_id, section))
-    log("admin", f"section {section} sold out for {event_id}")
-    return {"event_id": event_id, "section": section, "available": 0}
+    event_id = payload.get("event_id")
+    city = payload.get("city")
+
+    if event_id:                      # explicit single show, still supported
+        rows = [event_id]
+    else:
+        city = city or "Amsterdam"
+        rows = [r["id"] for r in
+                db().execute("SELECT id FROM events WHERE city=?", (city,)).fetchall()]
+        if not rows:
+            raise HTTPException(404, f"no shows in {city!r}")
+
+    for eid in rows:
+        run("UPDATE sections SET sold=total WHERE event_id=? AND section=?", (eid, section))
+    where = event_id or f"all {len(rows)} {city} shows"
+    log("admin", f"section {section} sold out for {where}")
+    return {"events": rows, "section": section, "available": 0}
 
 
 @app.post("/admin/hang-once")

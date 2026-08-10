@@ -36,6 +36,13 @@ from .tools import get_seatmap, note_companion, purchase, search_events
 budget_split = Agent(
     name="budget_split",
     model=MODEL,
+    # The description is what the MAIN agent reads when deciding whether to call
+    # this. A vague one and it does the sums itself, which is the whole point of
+    # the step going quietly missing.
+    description=(
+        "Works out ticket costs. Call this for ANY question about totals, "
+        "per-seat costs, or which sections fit a budget."
+    ),
     # THE LINE. Without it this agent inherits the whole conversation.
     include_contents="none",
     instruction="""
@@ -63,9 +70,13 @@ Use note_companion when someone mentions who is coming and what limits them —
 that fact needs to outlive this chat. Use remember() for preferences and
 outcomes, never for prices or availability.
 
-For any arithmetic across several shows, call budget_split. Give it the budget,
-the party size, and the sections with prices. It cannot see this conversation,
-so include everything it needs.
+NEVER do ticket arithmetic yourself. The moment a question involves a total, a
+per-seat cost, or which sections fit a budget, call budget_split — even when the
+sum looks trivial and even when you are confident you could do it.
+
+Call it with the budget, the party size, and the sections with prices. It cannot
+see this conversation, so include everything it needs. If nobody has named a
+budget yet, ask for one before you start comparing prices.
 
 Be concrete: name the show, the city, the section, and the price. Keep answers
 to two or three sentences unless asked for more.

@@ -295,8 +295,9 @@ async function hit(path, body) {
   refresh();
 }
 function sellout(section) {
-  const first = (S.inventory || [])[0];
-  hit('/admin/sellout', {event_id: first ? first.event_id : 'ms-ams-01', section: section || 'A'});
+  // Every Amsterdam show, both days. Picking one row out of the listing broke
+  // the moment the listing was reordered.
+  hit('/admin/sellout', {city: 'Amsterdam', section: section || 'A'});
 }
 document.querySelectorAll('#clock button').forEach(b => {
   b.onclick = () => hit('/admin/clock', {multiplier: +b.dataset.mult});

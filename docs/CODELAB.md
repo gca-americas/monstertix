@@ -102,7 +102,7 @@ Your prompt now starts with `(.venv)`.
 
 ### Start the rig
 
-We'll start by testing the Developer Tooling. **`adk web`** is the development UI that ships with ADK. It let's you interact with the agent you build without needing to build the frontend and shows you details of the call, such as every tool call and its arguments, the session state as it changes, the artifacts the agent saved, and the raw events underneath. Normally you would not enable this for your project in production. It is the best window into a running agent while you are learning. In step 3 you see the frontend we want to expose,and in the final step it gets deployed.
+We'll start by testing the Developer Tooling. **`adk web`** is the development UI that ships with ADK. It lets you talk to the agent you are building without writing a frontend first, and it shows you what a chat window cannot: every tool call and its arguments, the session state as it changes, the artifacts the agent saved, and the raw events underneath. You would not expose it in production. It is the best window into a running agent while you are learning, which is exactly what you need for the next two hours. In step 3 you build the frontend you would actually expose, and in the final step you deploy it.
 
 👉💻 **Terminal 1** — load the starting agent, then start the development UI:
 
@@ -228,7 +228,7 @@ Expect something like:
 
 > The Midnight Signal has shows coming up in Amsterdam, New York, Tokyo, Mexico City and Auckland.
 
-The same five cities you just read off the panel. The agent found out by calling `search_events`, which fetch the info from the venue. This is how the agent knows in this workshop.
+The same five cities you just read off the panel. The agent found out by calling `search_events`, which fetches the tour from the venue. That is the only way it knows anything in this workshop.
 
 
 ### Read what just happened
@@ -305,14 +305,6 @@ An ordinary function. No decorator, no registration, no schema to write. ADK rea
 PLACEHOLDER - PICTURE
 
 
-👉 Now look at the four tabs on the **left**:
-
-| Tab | What it holds |
-|---|---|
-| **Info** | which agent, which model, which tools |
-| **State** | this session's memory, as key/value pairs — you live here in step 4 |
-| **Artifacts** | files the agent saved, which never enter the prompt |
-| **Evals** | not used in this workshop |
 
 👉 The icons down the far-left edge switch what the panel shows. The second one is the **agent graph** — try it and you should see two tools.:
 
@@ -324,7 +316,7 @@ PLACEHOLDER - PICTURE
  search_events  get_seatmap
 ```
 
-👀 If that worked, all three moving parts are proven: `adk web` reached the model, the model picked a tool, and the tool reached your venue. 
+👀 If that worked, all three moving parts are proven: `adk web` reached the model, the model picked a tool, and the tool reached your venue.
 
 
 <aside class="positive">
@@ -337,7 +329,7 @@ PLACEHOLDER - PICTURE
 <br><br>
 <i>"Write a Google ADK 2 agent package called <code>concert</code>. <code>agent.py</code> defines <code>root_agent = Agent(name, model, instruction, tools)</code>. <code>tools.py</code> has two plain Python functions, <code>search_events(city, weekday)</code> and <code>get_seatmap(event_id)</code>, each with a docstring describing every argument, because ADK builds the tool schema from the signature and the docstring. <code>venue.py</code> is a thin httpx wrapper around a base URL from <code>VENUE_URL</code>. <code>config.py</code> reads the model id from <code>ADK_MODEL</code> and fails loudly at import if Vertex credentials are missing."</i>
 <br><br>
-Note the <b>docstrings</b>. They are the tool schema the model reads. Ask for a tool without one and you get a tool the model cannot use properly.
+Note the <b>docstrings</b>. They are not comments here, they are the tool schema the model reads. Ask for a tool without one and you get a tool the model cannot use properly.
 </aside>
 
 ---
@@ -368,7 +360,7 @@ What changed since the last step:
 | `tools.py` | added `purchase`. The agent can now spend money |
 | `agent.py` | `purchase` added to the tool list, and a second instruction written for you to try later |
 
-The `purchase` tool give your agent access to actually purchase the ticket.
+The `purchase` tool gives your agent the ability to actually buy a ticket.
 
 👉✨ In the chat at **:8000**, type:
 
@@ -376,16 +368,16 @@ The `purchase` tool give your agent access to actually purchase the ticket.
 I want to see The Midnight Signal. I'm in Amsterdam, going with Sam, budget around $200 each.
 ```
 
-It searches the tour, reads seat maps, and reasons about your budget and your company. This is a genuinely capable assistant. 
+It searches the tour, reads seat maps, and reasons about your budget and your company. This is a genuinely capable assistant.
 Now close the laptop. The presale opens at 10:00 on Tuesday and you are at work.
 
-**NOTHING HAPPENS!** 
+**NOTHING HAPPENS!**
 
 It did not run at 10:00. **It was never running during the on-sale at all.** Nothing attempted anything.
 
 ### So tell it not to sleep
 
-What would you do to fix it? Try what the most beginner will do yourself . Recall `INSTRUCTION` from step 1, that get handed to the model on every turn. Rewrite it.
+What would you do to fix it? Try the thing most people reach for first. Recall `INSTRUCTION` from step 1, the prose handed to the model on every turn, and rewrite it.
 
 👉💻 Open `agent/concert/agent.py`. Below `INSTRUCTION` there is a second one, already written for you. Try changing it yourself if you like:
 
@@ -426,7 +418,7 @@ It will agree, and it will sound like it means it.
 
 👉 Now wait. Do not type anything else. Watch the panel.
 
-Give it a minute. **NOTHING HAPPENS!** 
+Give it a minute. **NOTHING HAPPENS!**
 
 ### Why that prompt was never going to work
 
@@ -487,7 +479,7 @@ So write that something in the next step. Allow forty lines.
 > Neither half knows about the other's job — which is why they survive all the
 > way to Cloud Run and Cloud Scheduler unchanged.
 
-So now I left you with a problem, an agent runs only when something calls it, and no wording changes that. So build the something.
+So you are left with a problem: an agent runs only when something calls it, and no wording changes that. So build the something.
 
 👉🔴 On the **venue panel**, press **RESET THE VENUE**. Every step starts from
 the same world: 8 shows, all seats available, clock at 1×.
@@ -731,7 +723,7 @@ It bought *something*. Look at what it had to guess. It picked Amsterdam and sec
 👉💻 In the **terminal 1**, run:
 ```bash
 cd ~/longrunningag
-./use-solution.sh 4
+./use-solution.sh 4 --force
 ```
 
 What changed since the last step:
@@ -755,8 +747,8 @@ Two flags you have not used before:
 
 | Flag | What it is |
 |---|---|
-| `--session_service_uri` | a SQLite database file. ADK writes every message, tool call and state change into it as rows |
-| `--artifact_service_uri` | a folder. Files the agent saves land there as real files you can `ls` |
+| `session_service_uri` | ADK writes every message, tool call and state change into it as rows (SQLite database.) |
+| `artifact_service_uri` | Files the agent saves to.(Files) |
 
 Without them, ADK keeps everything in memory and throws it away when you stop the process. These two settings are what make it persist.
 
@@ -782,17 +774,6 @@ in an editor:
 
 **That is why the amber weeknight rows matter.** A weeknight show is $10 a seat cheaper, has better seats left, and sits at the top of the list, and it is the wrong answer for this person. The only reason the agent can know that is a file it wrote after the last booking. Whether that fact survives is steps 4 and 5.
 
-<aside class="positive">
-<b>👀 Developer's Note — where the tour actually lives.</b> <code>venue/app.py</code>, in a constant called <code>TOUR</code>: eight hardcoded rows loaded into SQLite when the venue starts. Real arenas, invented band, so nothing here impersonates an actual on-sale. Change a row, restart the venue, and the agent's answer changes — it has no other source.
-</aside>
-
-
-<aside class="positive">
-<b>👀 Developer's Note — why <code>adk web</code> for this step.</b> <code>adk web</code> is a development tool. It shows you what the agent stored and where, which is the whole subject of this step. It is not how you run an agent for real — for that you write a Runner, which you did in the last step. We use the dev UI here to see the storage, and go back to a Runner when it is time to deploy.
-</aside>
-
----
-
 
 
 ### The three tools we added
@@ -810,6 +791,14 @@ def note_companion(name: str, constraint: str, tool_context: ToolContext) -> dic
 Add it because "Sam can't do weeknights" has to still be true next week. Write it into `user:prefs` to make that happen, and watch the `user:` part of the name do the work. Come back to that below.
 
 **`recall` and `remember`** read and write a text file, `memory/userx.md`. Hold those for a moment.
+
+
+👉 Now look at the two places agent store it's context:
+
+| location | What it holds |
+|---|---|
+| **State** | this session's memory, as key/value pairs — you live here in step 4 |
+| **Artifacts** | files the agent saved, which never enter the prompt |
 
 **Look at what changed in `get_seatmap`.** It used to return the whole seat map. Now it saves the seat map to a file and returns a short summary:
 
@@ -843,18 +832,15 @@ Look at the line in `get_seatmap` again:
 await tool_context.save_artifact(f"seatmap_{event_id}.json", part)
 ```
 
-`tool_context` comes from ADK, which passes it into your tool as an argument, and
-`save_artifact` is a method on it. That line is where your tool hands the bytes
-to ADK.
+`tool_context` comes from ADK, which passes it into your tool as an argument, and `save_artifact` is a method on it. That line is where your tool hands the bytes to ADK.
 
-ADK then writes them, using whichever **artifact service** it was started with.
-You picked that with the flag:
+ADK then writes them, using whichever **artifact service** it was started with. You picked that with the flag:
 
 ```bash
 --artifact_service_uri="file://$WORKSHOP/artifacts"
 ```
 
-ADK ships three, and the URI picks one:
+ADK has three locations to store them:
 
 | URI | Where the bytes go |
 |---|---|
@@ -862,13 +848,14 @@ ADK ships three, and the URI picks one:
 | `file://…` | a folder on disk. What you are using now |
 | `gs://bucket` | Cloud Storage. What the deployed agent uses in the last step |
 
-👉💻 They are files:
+👉💻 Here we chooise files:
 
 ```bash
 ls -R ~/longrunningag/artifacts
 ```
 
-To move from your laptop to Cloud Storage, change `file://` to `gs://`. That is the whole migration.
+To move from your laptop to Cloud Storage, change `file://` to `gs://`. (We'll see this in Step 10)
+
 ---
 
 ### Our memory store
@@ -888,11 +875,7 @@ ADK ships three implementations of it:
 | `VertexAiRagMemoryService` | `rag://` | a Vertex AI RAG corpus |
 | `VertexAiMemoryBankService` | `agentengine://` | an Agent Engine resource |
 
-Write your own for this workshop. Rule out `InMemoryMemoryService`, which forgets
-everything when you stop the process, and rule out the other two, which need
-cloud resources that take minutes to create. Pick a file instead, because you can
-seed it in advance and read it in an editor. So take `memory.py` as your own
-implementation, storing everything in a Markdown file:
+We write our own for this workshop. Rule out `InMemoryMemoryService`, which forgets everything when you stop the process, and rule out the other two, which need cloud resources that take minutes to create. Pick a file instead, because you can seed it in advance and read it in an editor. So take `memory.py` as your own implementation, we're storing everything in a Markdown file:
 
 ```python
 class MarkdownMemoryService(BaseMemoryService):
@@ -904,8 +887,7 @@ class MarkdownMemoryService(BaseMemoryService):
                 role="user", parts=[types.Part(text=path.read_text())]))])
 ```
 
-`SearchMemoryResponse` and `MemoryEntry` are ADK's types, and Memory Bank returns
-the same objects. One has a managed service behind it. Ours has a file.
+`SearchMemoryResponse` and `MemoryEntry` are ADK's types, and Memory Bank returns the same objects. One has a managed service behind it. Ours has a file.
 
 Choose a file for one reason: you can open it and read it. Your agent's entire long-term memory is a page of text.
 
@@ -913,8 +895,7 @@ Choose a file for one reason: you can open it and read it. Your agent's entire l
 <b>⚠️ We call this service from a tool, which is not where it belongs.</b> A memory service belongs on the Runner, and ADK then uses it for you:
 <pre>Runner(agent=root_agent, app_name="concert",
        session_service=...,
-       memory_service=MarkdownMemoryService("./memory"))</pre>
-That is what <code>monstertix/server.py</code> does — the line is in there. But <code>adk web</code> builds its services at startup from a URI, before it loads any of your code, so it cannot be handed an object. For the rest of this workshop the <code>recall</code> and <code>remember</code> tools call the service directly.
+       memory_service=MarkdownMemoryService("./memory"))</pre> That is what <code>monstertix/server.py</code> does. But <code>adk web</code> builds its services at startup from a URI, before it loads any of your code, so it cannot be handed an object. For the rest of this workshop the <code>recall</code> and <code>remember</code> tools call the service directly.
 </aside>
 
 ---
@@ -927,30 +908,53 @@ You now have four places that can hold a fact. Look at all four.
 
 👉 Click **New Session** in the top bar.
 
-👉✨ Say two things:
+👉✨ Say three things, one after the other:
 
 ```
 Sam can't do weeknights, by the way.
 ```
 
+![New session, first turn](img/04-01-newsession1.png)
+
 ```
 Show me the seat map for the Amsterdam Saturday show.
 ```
 
-That put three things into storage:
+![New session, second turn](img/04-01-newsession2.png)
 
-| | What was stored | Which tool did it |
-|---|---|---|
-| 1 | Sam can't do weeknights | `note_companion` |
-| 2 | the full seat map, 6 KB | `get_seatmap`, via `save_artifact` |
-| 3 | a short summary of the seat map | `get_seatmap`, into `temp:seatmap` |
+```
+Show me the seat map for the Amsterdam Saturday show.
+```
 
-👉📝 Write down where you think each of the three went, before you look.
+![New session, second turn](img/04-01-newsession2.png)
+
+```
+Actually, hold that thought — what else is on in Amsterdam?
+```
+
+That third message matters. It ends the turn that read the seat map, and ending a
+turn is what makes `temp:` disappear.
+
+Three things went into storage, in three different places:
+
+| | What was stored | Which tool did it | Where it went |
+|---|---|---|---|
+| 1 | Sam can't do weeknights | `note_companion` | `user:prefs`, in session state |
+| 2 | the full seat map, 6 KB | `get_seatmap`, via `save_artifact` | the artifact service |
+| 3 | a one-line seat map summary | `get_seatmap`, into `temp:seatmap` | **nowhere** |
 
 👉 Now check. The **State** tab and the **Artifacts** tab are on the left of
 `adk web`.
 
-Two of the three are there. The third is not, and we come back to it below.
+![State tab](img/04-01-newsession3.png)
+
+![Artifacts tab](img/04-01-newsession4.png)
+
+**Look for `temp:seatmap` in the State tab.** It is not there, and it never was.
+`get_seatmap` wrote it on line 3 of the tool, you can read the code, and by the
+time the turn ended ADK had stripped it on the way to the database.
+
+Rows 1 and 2 are on screen. Row 3 is gone, and nothing told you.
 
 ### Then the older conversation
 
@@ -958,11 +962,33 @@ Two of the three are there. The third is not, and we come back to it below.
 
 This is the conversation seeded into the database before you arrived. Somebody else booked tickets two days ago, and you are picking it up cold.
 
+![The two-days-ago session](img/04-02-oldsession1.png)
+
 👉 Look at the **event stream** — the middle column, with the **Events / Traces** toggle above it. The oldest turns have been replaced by a one-paragraph summary.
 Something rewrote this person's conversation. (We'll cover that a bit later)
 
-👉 Look at the **State** tab. `user:prefs` is here too, holding the same kind of thing you just wrote in your own session. That is what the `user:` prefix does:
-the key belongs to the person, not to the conversation.
+![Compacted turns](img/04-02-oldsession2.png)
+
+👉 Look at the **State** tab. Three kinds of key are sitting there together:
+
+```
+target_event_id   ms-ams-01                      ← plain: this booking only
+party_size        2                              ← plain: this booking only
+user:prefs        {"excluded_weekdays": [...]}   ← the person, every session
+```
+
+`user:prefs` holds the same kind of thing you just wrote in your own session, and the `user:` prefix is why it belongs to the person rather than to the conversation.
+
+**`target_event_id` and `party_size` have no prefix at all**, and this is the only place in the workshop you will see them. They were written when this booking started, they are still here two days later, and they will go when this session does. That is what plain session state is for: facts that are true of *this* booking and meaningless outside it. Your own session has none of them, because you have not started a booking.
+
+👉 **Now compare the two State tabs.** This session is two days old, thirteen turns long, and written by somebody else. `user:prefs` is here. Whatever artifacts they saved are here.
+
+`temp:seatmap` is not here either.
+
+That is the whole point of the prefix, seen twice: a fresh session you just
+wrote, and an old one you did not, and in neither of them does anything
+`temp:`-prefixed survive. It is not that yours was lost. **Nothing prefixed
+`temp:` has ever reached a database, in any session, ever.**
 
 ### Then the file
 
@@ -972,11 +998,7 @@ the key belongs to the person, not to the conversation.
 cloudshell edit ~/longrunningag/memory/userx.md
 ```
 
-Three bookings, going back to January.
-
-None of this is in a session, and none of it is in the database. The agent reads
-it when it calls `recall()`, and it will still be there after you delete
-`sessions.db`.
+Three bookings, going back to January. The agent reads it when it calls `recall()`, and it will still be there even if we lost the session data.
 
 ---
 
@@ -985,10 +1007,13 @@ it when it calls `recall()`, and it will still be there after you delete
 | Where it lives | Survives the next message? | Survives a restart? | Survives deleting the session? |
 |---|---|---|---|
 | `temp:seatmap` | **no** | no | no |
-| `party_size` — plain session state | yes | yes | no |
+| `party_size` — plain session state, in `two-days-ago` | yes | yes | no |
 | `user:prefs` | yes | yes | **yes** |
 | `memory/userx.md` | yes | yes | yes, and survives deleting the database |
 | an artifact | yes | yes | depends on the service |
+
+**Read that table as being about the containers, not about what is in them.**
+`memory/userx.md` survives everything, and it only ever contains what `remember()`chose to put there. Nothing writes your current conversation into it. So the file outliving a session is not the same as the agent remembering what you were just talking about, and step 5 is where that distinction bites.
 
 ```
                        ┌─────────────────────────────────────────┐
@@ -1026,13 +1051,6 @@ An **invocation** is one turn: you send a message, the agent thinks, calls howev
 
 When an invocation ends, ADK writes the new state to the database and strips every `temp:` key on the way.
 
-### So `temp:seatmap` was never saved
-
-`get_seatmap` wrote it, and you can see the line. Now go looking: it is not in the State tab, and not anywhere else you could have checked.
-
-Use `temp:` as scratch space. Let one tool leave something for the next tool in the same turn without it becoming permanent. Watch `get_seatmap` stash a summary in case the agent buys in the same breath, and if it does not, nobody is left holding a seat map forever. Grant that this is a reasonable thing to want.
-
-Do not assume it is still there afterwards. That is the mistake.
 
 <aside class="positive">
 <b>👀 Developer's Note — you will meet this again in two steps.</b> ADK's own <code>ResumabilityConfig</code> docstring says: <i>"Any temporary / in-memory state will be lost upon resumption."</i> Your agent is about to join a queue, stop running for forty minutes, and get woken up. <code>temp:</code> is the thing that will not survive that.
@@ -1050,23 +1068,13 @@ Note the part worth checking by hand: that it returns <b>ADK's types</b> and not
 
 #### One thing left unexplained
 
-In `two-days-ago` you saw a summary sitting where somebody's first few turns used to be. Nothing you did put it there.
-ADK wrote it automatically once the conversation got long enough. Take that into the next step, which is about exactly this.
+In `two-days-ago` you saw a summary sitting where somebody's first few turns used to be. Nothing you did put it there. ADK wrote it automatically once the conversation got long enough. Take that into the next step, which is about exactly this.
 
-> **Every fact has a shelf life. Choose where to put it, or ADK will choose for you.**
+**Every fact has a shelf life**
 
 ---
 
 ## What the summary throws away
-
-
-
-
-
-
-
-
-
 
 
 > **What this step teaches**
@@ -1082,7 +1090,7 @@ the same world: 8 shows, all seats available, clock at 1×.
 
 ```bash
 cd ~/longrunningag
-./use-solution.sh 5
+./use-solution.sh 5 --force
 ```
 
 What changed since the last step:
@@ -1148,7 +1156,7 @@ budget_split = Agent(
     name="budget_split",
     model=MODEL,
     include_contents="none",      # sees none of the conversation
-    instruction="You do ticket arithmetic and nothing else...",
+    instruction="You do ticket arithmetic and nothing else...", #just the budget
     output_key="budget_plan",     # its answer goes into state
 )
 
@@ -1158,30 +1166,17 @@ root_agent = Agent(
 )
 ```
 
-Answer three questions here, or the choice looks arbitrary.
 
-**Why an agent and not a plain function?** Because the work needs a model. Read
-"which of these sections fit a $200 budget for four people, and what is the
-total" as arithmetic wrapped in judgement, with an answer a person has to be able
-to read. Let a Python function multiply, and do not ask it to decide which
-options are worth mentioning.
+**Why an agent and not a plain function?** Because the work needs a model. Read "which of these sections fit a $200 budget for four people, and what is the total" as arithmetic wrapped in judgement, with an answer a person has to be able to read. Let a Python function multiply, and do not ask it to decide which options are worth mentioning.
 
-**Then why not let the main agent do it?** Look at the next line.
-`include_contents="none"` means this agent is handed **none** of the conversation.
-No group chat, no preferences, no forty tour dates. It gets the request and
-nothing else. That flag only exists on an `Agent`, which is the real reason this
-is an agent rather than a function.
+**Then why not let the main agent do it?** Look at the next line. `include_contents="none"` means this agent is handed **none** of the conversation. No group chat, no preferences, no forty tour dates. It gets the request and
+nothing else. That flag only exists on an `Agent`, which is the real reason this is an agent rather than a function.
 
-Prefer the short prompt: cheaper, faster, and much harder to derail. Rely on the
-arithmetic being immune to something said twenty turns ago, because it never sees
-it.
+Prefer the short prompt: cheaper, faster, and much harder to derail. Rely on the arithmetic being immune to something said twenty turns ago, because it never sees it.
 
-**Why `AgentTool`?** Wrap the agent with it so the main agent can call it like
-any other tool. From the model's side, read `budget_split` as identical to
-`search_events`.
+**Why `AgentTool`?** Wrap the agent with it so the main agent can call it like any other tool. From the model's side, read `budget_split` as identical to `search_events`.
 
-**And `output_key="budget_plan"`** puts the answer into session state under that
-name instead of leaving it loose in the conversation. Watch why that matters.
+**And `output_key="budget_plan"`** puts the answer into session state under that name instead of leaving it loose in the conversation. Watch why that matters.
 
 ---
 
@@ -1203,41 +1198,40 @@ This one works:
 hello
 ```
 ```
-what are my current options
+what's on in Amsterdam?
 ```
 ```
-Is it possible to go to all of them
+Sam is coming with us, and he can't do weeknights
 ```
 ```
-what's the cheapest option overall
+there are 4 of us and I can spend about $200 a head. What fits?
 ```
-```
-what if I have 10 people with me, any changes to the seat
-```
-
-### What you can see: `budget_plan`
-
 👉 Open the **State** tab.
 
-Find `budget_plan` there, holding the arithmetic agent's full answer, and credit
-`output_key` for it. Keep the number in state, where nothing summarises it,
-rather than in the conversation, where something will.
+Find `budget_plan` there, holding the arithmetic agent's full answer. 
+
+![budget_plan after the first budget question](img/05-01-budget1.png)
+
+👉✨ Now change the numbers on it:
+
+```
+what if 10 people come and I can only do $120 each?
+```
+
+👉 Look at `budget_plan` again. It has been **overwritten**, not appended to. It's because `output_key` holds the latest one.
+
+![budget_plan after the second budget question](img/05-01-budget2.png)
+
 
 ### What you cannot see: the summary
 
-Somewhere in those turns, ADK summarised the earlier ones. **Do not expect the
-dev UI to show you that**, and understand why.
+Somewhere in those turns, ADK summarised the earlier ones. **Do not expect the dev UI to show you that**, and understand why.
 
-A compaction record is an event whose summary lives in `actions.compaction`, and
-it carries no message content. The dev UI draws events from their content, so a
-compaction event renders as nothing at all: one of the blank numbered rows in the
-stream.
+A compaction record is an event whose summary lives in `actions.compaction`, and it carries no message content. The dev UI draws events from their content, so a compaction event renders as nothing at all: one of the blank numbered rows in the stream.
 
-Notice your conversation still shows every turn, because the UI shows what is
-*stored*. Keep the two apart: compaction changes what gets **sent to the model**
-on the next turn. Storage keeps everything. The prompt does not.
+Notice your conversation still shows every turn, because the UI shows what is *stored*. Keep the two apart: compaction changes what gets **sent to the model** on the next turn. Storage keeps everything. The prompt does not.
 
-👉💻 So read it out directly:
+👉💻 In a new **Terminal**, run to read it directly:
 
 ```bash
 cd ~/longrunningag
@@ -1255,48 +1249,54 @@ Here is a real one, abridged:
 ```
 ── summary 1 ──────────────────────────────────────────────────────
 
-**User Request:**
-The user initially asked for their current options for concerts and then
-followed up by asking if it's possible to attend all of the suggested
-weekend shows in Amsterdam, New York, Tokyo and Mexico City.
+Conversation Language: English
 
-**Context Summary:**
-The agent recalled user preferences, noting a preference for weekend shows,
-specifically in Amsterdam, and having been to New York twice...
+  **User Request:**
+  The user initially wanted to know what concerts are playing in Amsterdam.
+  Subsequently, the user provided a constraint regarding a companion, Sam.
 
-It calculated the total cost for two tickets across all four shows:
-*   Section A (Lower Bowl): $1680 total ($210 per ticket)
-*   Section C (General Admission): $760 total ($95 per ticket)
-*   Section B (Upper Bowl): $1160 total ($145 per ticket)
+  **Context Summary:**
+  The user is planning a concert trip. The agent identified two events in
+  Amsterdam: "The Midnight Signal" at the Ziggo Dome on Tuesday, November
+  10 and Saturday, November 14, 2026. The user then informed the agent that a
+  companion named "Sam" will be joining, but "he can't do weeknights." The
+  agent has successfully noted this constraint for Sam.
 
-**Unresolved Questions or Tasks:**
-*   The user needs to indicate if the provided costs for attending all four
-    shows work with their budget.
+  **Key Decisions/Information Obtained:**
+  *   **City of interest:** Amsterdam
+  *   **Events found:** "The Midnight Signal" at the Ziggo Dome, Tuesday
+  10 November and Saturday 14 November 2026.
+  *   **Companion:** Sam
+  *   **Companion constraint:** Sam cannot attend concerts on weeknights.
 
-**Tools Used:**
-*   `recall`  `search_events`  `get_seatmap`
+  **Unresolved Questions/Tasks:**
+  *   The agent has not explicitly confirmed if the found event (which is
+  on a Saturday) is suitable given Sam's constraint, nor has it asked the
+  user for the next steps regarding this event or further event searches.
+
+  **Tools Used:**
+  *   `recall`
+  *   `search_events`
+  *   `note_companion`
 ```
 
-Call that a good summary. It kept the prices, the sections, the cities and the
-preferences, and correctly noted that nothing had been decided yet.
+It kept the prices, the sections, the cities and the preferences, and correctly noted that nothing had been decided yet.
 
-So look at what actually changed. Stop thinking of your conversation as what the
-model reads. **It gets this instead**: a description of your conversation,
-written by another model call, which you did not write and were never shown.
+So look at what actually changed. Stop thinking of your conversation as what the model reads. **It gets this instead**: a description of your conversation, written by another model call, which you did not write and were never shown.
 
 Three things follow from that:
 
-**It is a paraphrase.** Nothing here is what anybody said. It is an account of
-what was said, produced by the same kind of process that produces everything else
-the model gets wrong occasionally.
+**It is a paraphrase.** Nothing here is what anybody said. It is an account of what was said, produced by the same kind of process that produces everything else the model gets wrong occasionally.
 
-**Do not go looking for it in the UI.** You just ran a script to read it, and
-nobody does that in production unless something has already gone wrong.
+**Do not go looking for it in the UI.** You just ran a script to read it, and nobody does that in production unless something has already gone wrong.
 
-**It will happen again.** Every three turns, on a conversation that is now partly
-made of previous summaries.
+**It will happen again.** Every three turns, on a conversation that is now partly made of previous summaries.
 
 ### Try to book without repeating yourself
+
+**In a new session** Do not start a new one — the summary you just read
+lives in *this* session's events, and that is the only reason the agent still
+knows anything about Amsterdam.
 
 👉✨ Give it nothing new:
 
@@ -1304,25 +1304,44 @@ made of previous summaries.
 Book us something.
 ```
 
-On the run above, watch the agent ask which show, which section, and how many
-people. Mark that **correct**: the summary itself says the user never confirmed
-anything, so the agent asked. Give compaction the credit.
+Watch the agent ask which show, which section, and how many people. Mark that **correct**: the summary itself says the user never confirmed anything, so the agent asked. Give compaction the credit.
 
-Sit with that. The compaction here worked, and the agent still had to go back to
-the user. Now imagine the summary had been slightly worse, and
-instead of asking, it had picked one.
+Sit with that. The compaction here worked, and the agent still had to go back to the user. Now imagine the summary had been slightly worse, and instead of asking, it had picked one.
 
 👉✨ Answer it and let the booking go through:
 
 ```
-Amsterdam, section C, 8 people
+Amsterdam Saturday, section C, 8 people
 ```
 
-The agent will tell you it worked.
+It reads the order back before it spends anything:
+
+> *"You want to book 8 tickets in Section C for The Midnight Signal in Amsterdam
+> on Saturday, November 14th. The total cost will be $760. Shall I go ahead and
+> purchase these tickets?"*
+
+👉✨ Confirm it:
+
+```
+yes
+```
+
+Now it tells you it worked:
+
+> *"Your purchase of 8 tickets in Section C for The Midnight Signal in Amsterdam
+> on Saturday, November 14th, totaling $760, is complete. Your order ID is
+> ord_227877fe."*
+
+
+<aside class="negative">
+<b>⚠️ A new session would not pick up where this left off, and it is worth knowing exactly why.</b> Three different things are holding what you said, and only one of them travels. The <b>transcript and its summary</b> live in this session's events, so a new session starts blank. <b>Session state</b> like <code>budget_plan</code> is scoped to this session too, and goes with it. Only <code>user:prefs</code> and <code>memory/userx.md</code> cross the boundary. <b>Both survive, and neither helps</b>, which is not the contradiction it looks like: step 4's table was about which <i>stores</i> outlive a session, and this is about what is <i>in</i> them. Open <code>memory/userx.md</code> and you will find preferences and past bookings, because that is all <code>remember()</code> was ever called with. There is no line in it saying "we were discussing Amsterdam for four people", so a new session can read the whole file and still have no idea what "book us something" refers to.
+</aside>
 
 ### Go and check whether it did
 
 👉 Switch to the **venue panel**. Do not take the agent's word for it.
+
+![The order on the venue panel](img/05-01-result.png)
 
 | On the panel | What you should see |
 |---|---|
@@ -1331,11 +1350,7 @@ The agent will tell you it worked.
 | **The tour**, Amsterdam Saturday | section C is down by 8 |
 | **Activity** | `ord_xxxxxxxx — 8x section C @ 95 = 760` |
 
-Form this habit now, while the stakes are a fake ticket vendor.
-An agent's report is what it believes happened. The panel is what the venue
-actually recorded. For the rest of the workshop, when the agent tells you
-it did something, check the panel to find out whether that is true. In two steps,
-watch those two things disagree.
+Form this habit now, while the stakes are a fake ticket vendor. Check the panel to find out the ticket sale.
 
 <aside class="positive">
 <b>👀 Developer's Note — a good summary is still a summary.</b> This step is often taught as "compaction loses things", and sometimes it does. The sharper problem is that it always <i>paraphrases</i>. Your agent's memory of the last twenty turns is now a piece of generated text nobody reviewed. It is usually fine. When it is not, there is no error, no log line, and nothing in the UI — the agent simply believes something slightly different from what you said.
@@ -1351,13 +1366,9 @@ Note the two flags to check it actually set: <code>include_contents="none"</code
 
 ### Why `user:prefs` was the right choice
 
-Recall `note_companion` writing Sam's constraint into `user:prefs` last step, and
-the obvious objection: why bother with a tool when the agent could just remember
-it.
+Recall `note_companion` writing Sam's constraint into `user:prefs` last step, and the obvious objection: why bother with a tool when the agent could just remember it.
 
-Here is why. Keep state out of the conversation and no summary touches it. Check
-`user:prefs` and `budget_plan` against how they went in, and find them unchanged.
-Then check the transcript.
+Here is why. Keep state out of the conversation and no summary touches it. Check `user:prefs` and `budget_plan` against how they went in, and find them unchanged. Then check the transcript.
 
 > **A summary keeps the general shape and loses the details. Store anything you
 > cannot afford to lose somewhere other than the conversation.**
@@ -1365,13 +1376,6 @@ Then check the transcript.
 ---
 
 ## Pull the plug
-
-
-
-
-
-
-
 
 
 
@@ -1390,7 +1394,7 @@ the same world: 8 shows, all seats available, clock at 1×.
 
 ```bash
 cd ~/longrunningag
-./use-solution.sh 6
+./use-solution.sh 6 --force
 ```
 
 ### Run it
@@ -1421,43 +1425,33 @@ adk web agent --port 8000 \
 Get us two tickets to the Amsterdam show.
 ```
 
-It calls `recall`, then `search_events`, then `join_queue`, and answers with
-something close to this:
+It calls `recall`, then `search_events`, then `join_queue`, and answers with something close to this:
 
 ```
-You are in the queue for The Midnight Signal at Ziggo Dome, Amsterdam, on
-Saturday, November 14. Your position is 14203.
+You are in the queue for The Midnight Signal at Ziggo Dome, Amsterdam, on Saturday, November 14. Your position is 14203.
 ```
+
+
 
 Stop on two things in that answer.
 
-Notice it picked **Saturday** without asking you. There are two Amsterdam shows,
-the 17th is a Tuesday, and the memory file from the last step says Sam does not do
-weeknights. That is a fact from a previous booking deciding a question in this
-one.
+Notice it picked **Saturday** without asking you. There are two Amsterdam shows, the 17th is a Tuesday, and the memory file from the last step says Sam does not do weeknights. That is a fact from a previous booking deciding a question in this one.
 
-Notice too that it joined the queue **before** looking at a single seat or price,
-and said nothing about either. That is the venue's rule, and a real one: nobody
-can buy until they reach the front, so the only thing worth having early is a
-place in line. Which seats to take is a question for forty minutes from now.
+Notice too that it joined the queue **before** looking at a single seat or price, and said nothing about either. That is the venue's rule, and a real one: nobody can buy until they reach the front, so the only thing worth having early is a place in line. Which seats to take is a question for forty minutes from now.
 
-<aside class="negative">
-<b>⚠️ If it asked you which show instead of joining.</b> Answer it — <code>The Saturday one</code> — and it will join. The rest of the step works the same. You are seeing the model weigh a real ambiguity, and it does not always land the same way.
-</aside>
 
 👉 Look at the control panel. The banner reads:
 
+![The queue, still moving while nothing of yours runs](img/06-01-resume1.png)
 ```
 Agent is waiting in line — #14,203
 About 2400s at 1×. Safe to kill the agent right now — it will still be here.
 ```
 
-Take it at its word. The clock is at 1×, so that line is not a figure of speech:
-the queue is genuinely forty minutes long and it is not going anywhere while you
+The queue is genuinely forty minutes long and it is not going anywhere while you
 work.
 
-👉💻 **Kill the agent.** Leave the venue alone — it is on Cloud Run, and a real
-ticket seller does not go down because your laptop did:
+👉💻 **Kill the agent.**:
 
 ```
 Ctrl-C
@@ -1472,7 +1466,7 @@ adk web agent --port 8000 \
   --artifact_service_uri="file://$WORKSHOP/artifacts"
 ```
 
-👉✨ Ask the agent where it is in line:
+👉✨ In the same session, ask the agent where it is in line:
 
 ```
 Where am I in line?
@@ -1482,10 +1476,9 @@ Where am I in line?
 You are currently at position 12982 in the queue. It is not your turn yet.
 ```
 
-**Compare the ticket, and watch the position keep dropping while nothing was
-running.** Notice the agent did not know it had been killed. It called
-`check_queue` with the ticket it got before the restart, because that ticket was
-on disk.
+![The same ticket, after the restart](img/06-01-resume2.png)
+
+**Compare the ticket, and watch the position keep dropping while nothing was running.** Notice the agent did not know it had been killed. It called `check_queue` with the ticket it got before the restart, because that ticket was on disk.
 
 👉💻 See why:
 
@@ -1504,8 +1497,7 @@ timestamp
 event_data
 ```
 
-Seven columns, and six of them are labels. Every turn of every conversation is
-one row, and the turn itself, who said it, which tool it called, what came back,
+Six of the coloumns are labels. Every turn of every conversation is one row, and the turn itself, who said it, which tool it called, what came back,
 is JSON inside `event_data`.
 
 👉💻 Find your queue ticket in there:
@@ -1519,11 +1511,11 @@ sqlite3 sessions.db "select event_data from events;" \
 "ticket": "q_8cc2c6f9", "position": 14203
 ```
 
-**That is the whole trick.** The ticket the venue gave you went to disk the
-moment `join_queue` returned, and killing the process did not touch it. When
-`adk web` came back it read these rows and handed the model the same conversation
-it had before, ticket included. So watch the agent carry on without ever knowing
-it had been dead.
+**That is the whole trick.** The ticket the venue gave you went to disk the moment `join_queue` returned, and killing the process did not touch it. When `adk web` came back it read these rows and handed the model the same conversation it had before, ticket included. So watch the agent carry on without ever knowing it had been dead.
+
+**And notice what it did not do: start over.** It did not search the tour again, and it did not join the queue a second time. The events on disk record not just what was said but *where the run had got to* — parked on a `LongRunningFunctionTool` that had returned a ticket and was waiting on the queue. `ResumabilityConfig` is what makes that position part of the record rather than something living only in the dead process's memory, so the run picks up at that tool instead of replaying everything before it.
+
+That distinction matters more than it looks. Replaying would mean a second `join_queue` call, a second ticket, and a place at the back of a queue of 14,203 people — the run would get further from finishing every time it was resumed.
 
 <aside class="positive">
 <b>👀 Developer's Note — there is no <code>author</code> column.</b> In ADK 2.6.2 the events table is deliberately thin: identifiers, a timestamp, and one <code>event_data</code> blob. Everything else lives inside the JSON. If you want to query by author, pull it out with <code>json_extract(event_data, '$.author')</code>.
@@ -1552,8 +1544,7 @@ it had been dead.
 
 ### What made that work
 
-Three separate things, and it is worth being clear about which does what, because
-they are easy to confuse.
+Three separate things, and it is worth being clear about which does what, because they are easy to confuse.
 
 ```python
 LongRunningFunctionTool(func=join_queue)      # the tool returns without finishing
@@ -1569,48 +1560,11 @@ ResumabilityConfig(is_resumable=True)         # the run may pause and be picked 
 | `ResumabilityConfig` | lets ADK park an invocation on that unfinished call and continue it later, from the last event | the tool still returns early, but the run cannot be suspended and resumed. There is no paused invocation to continue |
 | the session URI | puts the session somewhere a new process can read | see below — this one is not what you expect |
 
-**The two code changes are what make a pause possible.** The flag is what makes
-it survive the process.
-
-### Test that flag yourself
-
-You might expect dropping `--session_service_uri` to lose everything. It does not.
-
-👉💻 Look:
-
-```bash
-find ~/longrunningag/agent -name "*.db"
-```
-
-With no session URI, expect `adk web` to fall back to a **per-agent SQLite file**
-at `agent/concert/.adk/session.db`. Your sessions still survive a restart. They
-simply live somewhere you did not choose, one per agent folder, so go and look
-for one lying around from earlier.
-
-So stop reading the flag as the difference between persisting and not persisting.
-It is you deciding where sessions live, which matters for two reasons:
-
-- **All your agents share one store.** Copying step 7's code over step 6's does
-  not lose your history, because the database is outside `agent/`
-- **The fallback is different in production.** ADK's Pub/Sub trigger endpoints
-  on Cloud Run do **not** get that local-file fallback. With no session URI
-  configured they use `InMemorySessionService`, and every wake starts from
-  nothing
-
-<aside class="negative">
-<b>⚠️ That second point is the one that bites.</b> It works on your laptop with no flag, so nothing tells you it is missing. Deployed, the same code silently forgets everything between wakes — no error, no warning, and it is the exact failure this step exists to prevent.
-</aside>
 
 <aside class="positive">
 <b>👀 Developer's Note — read ADK's own docstring for <code>ResumabilityConfig</code>:</b>
 <br><br>
 <i>"1. pause an invocation upon a long-running function call. 2. resume an invocation from the last event, if it's paused or failed midway through. Note: ADK resumes in a best-effort manner: 1. Tool call to resume needs to be idempotent because we only guarantee an at-least-once behavior once resumed. 2. Any temporary / in-memory state will be lost upon resumption."</i>
-<br><br>
-Point 1 is the second half of step 7. Point 2 is why <code>temp:</code> state vanished in step 4.
-</aside>
-
-<aside class="negative">
-<b>⚠️ Both service URIs must be absolute.</b> <code>file://./artifacts</code> is rejected outright, and a relative sqlite path lands wherever the process happened to start.
 </aside>
 
 <aside class="positive">
@@ -1632,12 +1586,6 @@ Note the third piece no prompt will give you: the <code>--session_service_uri</c
 
 
 
-
-
-
-
-
-
 > **What this step teaches**
 >
 > An agent that is missing information asks you for it. An agent holding
@@ -1645,9 +1593,7 @@ Note the third piece no prompt will give you: the <code>--session_service_uri</c
 > be read again immediately before you use them — and anything that spends money
 > has to be safe to run twice.
 
-**Do not load new code yet.** Stay on the previous step's agent, because you need
-it: it can buy tickets and it has no idea it should be careful. That is the whole
-point.
+**Do not load new code yet.** Stay on the previous step's agent, it can buy tickets and it has no idea it should be careful.
 
 👉🔴 Press **RESET THE VENUE**, then start a **new session** in `adk web` —
 the **+ New Session** button above the chat.
@@ -1663,11 +1609,6 @@ nothing.
 ```
 Get us two tickets to the Amsterdam show.
 ```
-
-Pick **Amsterdam**. **SELL THE GOOD SEATS** empties section A of the show
-currently in the queue, and the follow-up beats are written against Amsterdam.
-Send it to Tokyo instead and you will be pressing a button that changes nothing
-you can see.
 
 👉✨ Now, while it waits in line, ask about seats:
 
@@ -1688,6 +1629,8 @@ In thirty seconds one of them will not be.
 
 👉🔴 Press **SKIP THE WAIT** to send the agent to the front of the queue.
 
+![At the front of the queue](img/07-01-bug1.png)
+
 👉✨ Tell it to buy:
 
 ```
@@ -1707,14 +1650,11 @@ Oh no! It looks like the Section A tickets just sold out. Let me get an
 updated seat map to see what's still available.
 ```
 
-Notice it only re-read the seat map **after** being told no. Stop looking for
-something *missing* from its context, and look instead at what was *present*: two
-turns ago it read "section A: 400 available", and that sentence was still sitting
-in the conversation the model got handed.
+![The venue refuses: section A is gone](img/07-01-bug2.png)
 
-Be clear about where the old information is sitting. Rule out `temp:seatmap`,
-which the last step showed you never gets saved. Look in the **conversation**,
-and accept that no state prefix fixes that.
+Notice it only re-read the seat map **after** being told no. Stop looking for something *missing* from its context, and look instead at what was *present*: two turns ago it read "section A: 400 available", and that sentence was still sitting in the conversation the model got handed.
+
+Be clear about where the old information is sitting. Rule out `temp:seatmap`, which the last step showed you never gets saved. Look in the **conversation**, and accept that no state prefix fixes that.
 
 ```
    BUG ONE — the read goes stale
@@ -1730,6 +1670,8 @@ and accept that no state prefix fixes that.
 ### Bug two: bought twice
 
 👉🔴 Press **RESET THE VENUE**, then **BREAK THE NEXT PURCHASE**.
+
+![The next purchase armed to commit, then fail](img/07-01-bug3.png)
 
 👉✨ Start another **new session** and run it again — same show, same steps:
 
@@ -1747,7 +1689,7 @@ front of the queue*.
 👉✨ Now buy:
 
 ```
-You're at the front now — buy two seats in section A.
+Buy two seats in section A.
 ```
 
 The purchase fails:
@@ -1763,9 +1705,9 @@ Please try again.
 
 👉 Look at the panel **before you do anything else**. It says **one order**.
 
-The purchase did not fail. The venue took the money, wrote the order, and *then*
-the response died on the way back. From where the agent is standing those two
-things look identical, with no way to tell them apart.
+![One order on the panel, while the agent thinks it failed](img/07-01-bug4.png)
+
+The purchase did not fail. The venue took the money, wrote the order, and *then* the response died on the way back. From where the agent is standing those two things look identical, with no way to tell them apart.
 
 👉✨ Do what the agent asked:
 
@@ -1778,6 +1720,8 @@ Great news! Your purchase for two seats in Section A for the Amsterdam show
 on November 14th was successful. The total cost is $420.
 ```
 
+![The agent reports success after retrying](img/07-01-bug5.png)
+
 👉 The panel now reads:
 
 ```
@@ -1785,16 +1729,13 @@ Bought 2 times
 The retry went through again. This is the bug an idempotency key fixes.
 ```
 
-Four tickets, $840, for a show you wanted to see once. The agent's report was
-honest: from what it could see, it went well.
+![Two orders for one booking](img/07-01-bug6.png)
 
-Something tried the purchase again. Blame the model here, or yourself. In the
-last step, expect ADK's Pub/Sub trigger endpoint to do it automatically
-(`ADK_TRIGGER_MAX_RETRIES`, default 3). Elsewhere, expect a queue, a load
-balancer, or an impatient user clicking twice.
+Four tickets, $840, for a show you wanted to see once. The agent's report was honest: from what it could see, it went well.
 
-**Assume the venue cannot tell any of them apart.** So fix it with a key the
-venue recognises, not a setting on your side.
+Something tried the purchase again. 
+
+**Assume the venue cannot tell any of them apart.** So fix it with a key the venue recognises, not a setting on your side.
 
 ```
    BUG TWO — the write happens twice
@@ -1814,14 +1755,13 @@ venue recognises, not a setting on your side.
 
 ### Now fix both
 
-👉🔴 On the **venue panel**, press **RESET THE VENUE**. Every step starts from
-the same world: 8 shows, all seats available, clock at 1×.
+👉🔴 On the **venue panel**, press **RESET THE VENUE**. Every step starts from the same world: 8 shows, all seats available, clock at 1×.
 
 👉💻 *Now* load this step's code:
 
 ```bash
 cd ~/longrunningag
-./use-solution.sh 7
+./use-solution.sh 7 --force
 ```
 
 👉💻 In **terminal 1**, Ctrl-C and restart:
@@ -1863,19 +1803,36 @@ venue.post("/purchase", body, headers={"Idempotency-Key": key})
 
 ### Prove both are fixed
 
-👉🔴 **RESET THE VENUE**. Queue up, press **SELL THE GOOD SEATS** mid-wait, then
-tell it to buy section A.
+👉🔴 **RESET THE VENUE**. Queue up, press **SELL THE GOOD SEATS** mid-wait, then tell it to buy section A.
 
-This time watch it refuse itself, before the venue ever hears about it, and tell
-you what changed.
+This time it stops itself. Watch the agent say something like:
 
-👉🔴 **RESET**, then **BREAK THE NEXT PURCHASE**, and buy. Retry as many times
-as you like.
+> *"It looks like Section A just sold out. I need to re-read the seat map."*
+
+Then watch it call `get_seatmap` again, unprompted, and come back offering section C instead.
+
+👉🔴 **Read the venue's activity feed carefully**, because it shows both halves:
+
+```
+error  purchase failed: Section A has 0 seats left, 2 requested. Re-read the
+       seat map and pick again.
+agent  calling purchase
+```
+
+![The venue feed: the attempt, and the refusal](img/07-01-solution1.png)
+
+**`calling purchase` is there, and no order was created.** Those two are not in conflict. `panel.py` reports every tool call to the feed so you can watch the agent work, so the attempt is logged. `fence.py` runs after it, re-reads the seat map, and returns a dict — and returning a dict short-circuits the tool. So `purchase` in `tools.py` never runs, the venue's `/purchase` endpoint is never called, and **Tickets bought does not move.**
+
+That is the shape of the fix worth remembering. The agent still tried, and nothing stopped it from wanting to. The callback stopped the wanting from reaching the world, which is what an instruction could never do.
+
+👉🔴 **RESET**, then **BREAK THE NEXT PURCHASE**, and buy. Retry as many times as you like.
+
+![Still one order, however many times you retry](img/07-01-solution2.png)
 
 Check the order count. It stays at **1**.
 
 <aside class="positive">
-<b>👀 Developer's Note:</b> Neither of these bugs was written by you. The world changed under the agent, and something retried it. Both are guaranteed behaviours, not bad luck. ADK 2 also ships <code>runner.rewind_async(rewind_before_invocation_id=...)</code> to roll state back to before a bad decision.
+<b>👀 Developer's Note:</b> ADK 2 also ships <code>runner.rewind_async(rewind_before_invocation_id=...)</code> to roll state back to before a bad decision.
 </aside>
 
 <aside class="positive">
@@ -1886,18 +1843,11 @@ Check the order count. It stays at **1**.
 Note what makes this a gate rather than a suggestion: it is a <b>callback</b>, not an instruction. Ask for it in the prompt and the model complies most of the time. Ask for it in code and it complies every time.
 </aside>
 
-> **Information goes out of date. An agent holding old information does not
-> hesitate — it acts, and it sounds sure.**
+> **Information goes out of date, timeline matters for long running agents.
 
 ---
 
 ## Draw the flow in advance
-
-
-
-
-
-
 
 
 
@@ -1918,7 +1868,7 @@ the same world: 8 shows, all seats available, clock at 1×.
 
 ```bash
 cd ~/longrunningag
-./use-solution.sh 8
+./use-solution.sh 8 --force
 ```
 
 ### Run it
@@ -2258,7 +2208,7 @@ the same world: 8 shows, all seats available, clock at 1×.
 
 ```bash
 cd ~/longrunningag
-./use-solution.sh 9
+./use-solution.sh 9 --force
 ```
 
 ### Run it
@@ -2617,7 +2567,7 @@ the same world: 8 shows, all seats available, clock at 1×.
 
 ```bash
 cd ~/longrunningag
-./use-solution.sh 10
+./use-solution.sh 10 --force
 ```
 
 | File | What changed |
@@ -3104,8 +3054,8 @@ once the run could stop and start again, and impossible before.
 Reach for the complete working code at any step:
 
 ```bash
-./use-solution.sh N          # any step. resets memory + sessions + artifacts
-./use-solution.sh N --keep   # code only, leave state alone
+./use-solution.sh N --force          # any step. resets memory + sessions + artifacts
+./use-solution.sh N --force --keep   # code only, leave state alone
 ```
 
 ### When something breaks
@@ -3128,9 +3078,9 @@ Reach for the complete working code at any step:
 | Agent can't reach the venue | `curl $VENUE_URL/health`, or `./deploy-venue.sh` again |
 | Queue never advances | Press **SKIP THE WAIT**. At 1× the queue will not reach the front on its own |
 | A second queue ticket appears on the panel | You answered in the chat box instead of the `Enter your response...` box on the `adk_request_input` event. The chat box starts a new run |
-| Dropdown is empty, or the app will not load | `adk web` treats every folder under `agent/` as an app and fails the whole list if one is not. `ls agent/` should show `concert/` and nothing else — running things from inside `agent/` can leave a stray `memory/` behind. `./use-solution.sh 8` tidies it |
+| Dropdown is empty, or the app will not load | `adk web` treats every folder under `agent/` as an app and fails the whole list if one is not. `ls agent/` should show `concert/` and nothing else — running things from inside `agent/` can leave a stray `memory/` behind. `./use-solution.sh 8 --force` tidies it |
 | `[EXPERIMENTAL]` warnings | Expected. `EventsCompactionConfig` and `ResumabilityConfig` are both pre-GA in 2.6.2 |
 | Everything is strange | Press **RESET THE VENUE**, then `rm sessions.db` |
-| Memory file full of duplicate bookings | `remember()` appends every run. `./use-solution.sh N` resets it, or `cp seed/memory/default.md memory/userx.md` |
+| Memory file full of duplicate bookings | `remember()` appends every run. `./use-solution.sh N --force` resets it, or `cp seed/memory/default.md memory/userx.md` |
 | `adk: command not found` | `source .venv/bin/activate` — every new tab needs it |
 | Cloud Shell timed out | Start `adk web` again. `sessions.db` survived — which is step 6, happening to you for free |

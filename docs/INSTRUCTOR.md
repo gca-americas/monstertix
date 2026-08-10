@@ -298,6 +298,55 @@ ask for "memory" without naming `BaseMemoryService` and you will get a dictionar
 **Gets wrong:** Assistants will offer to deploy this to Agent Engine. **It cannot work** — trigger endpoints exist only on Cloud Run and GKE. They will also leave the session service unset, and trigger sessions default to in-memory and vanish, so the 3am run forgets it was ever in a queue.
 
 
+## Why it is built the way it is
+
+The decisions below are not obvious from the code, and each one has a wrong
+answer that looks reasonable. If somebody in the room asks "why not just…",
+this is the section that answers them.
+
+**Why the concert booker.** Earlier candidates: an expense approver (no
+consequential action), a sourdough coach (the agent cannot act, its only actuator
+is a notification), a CI bot (too hardcore), a trip booker (too common). The
+concert booker is the only one where the agent must act *while the human is
+unavailable*, which is what forces the agreed-budget pattern in step 9.
+
+**Why each student deploys their own venue.** A shared one means the moment
+somebody presses **SELL THE GOOD SEATS**, everyone else's agent fails for no
+visible reason. Half this workshop is deliberately breaking things, so isolation
+is not optional. It also gets `gcloud run deploy` in front of them in the first
+ten minutes, so step 10 is not the first time they have seen it.
+
+**Why the agent stays local until step 10.** Students edit it at every step. Nine
+deploys would cost twenty minutes of a two-hour workshop.
+
+**Why the weeknight shows are cheaper and listed first.** This is the trap the
+whole memory lesson rests on, so do not let it pass unnoticed in step 1. Every
+weeknight show is $10 a seat cheaper than the weekend one beside it, and it
+appears first in the city. It is therefore what an agent reaches for on price
+alone, or on order alone, and it is the wrong answer for somebody whose friend
+never turns up on a weeknight. The only thing standing between the agent and that
+mistake is a memory file it wrote after the last booking. If a student's agent
+books a Tuesday, that is the lesson landing, not a bug.
+
+**Why Vertex and ADC rather than an API key.** It makes step 10's diff honest:
+the credential model is identical on a laptop and on Cloud Run, so the swap table
+has nothing to say about auth. A key would make the workshop easier to start and
+the punchline weaker.
+
+**Why SQLite for sessions.** `sqlite3 sessions.db "select * from events"` puts a
+session on screen as rows. Cloud SQL through a proxy never feels that direct.
+
+**Why Cloud Run and not Agent Runtime for step 10.** Agent Runtime cannot receive
+scheduled or event-driven triggers. This is not a preference, and it is worth
+saying plainly if somebody asks why you did not use the managed option.
+
+**Why `seed()` upserts rather than `INSERT OR IGNORE`.** Anyone who ran an
+earlier version of this workshop has a `venue.db` holding the old dates and
+prices. `INSERT OR IGNORE` would leave them there for ever, with no error and
+nothing on screen to explain why their agent is reasoning about numbers nobody
+else in the room can see. The upsert corrects the catalogue on startup and
+deliberately leaves `sold` alone, so re-seeding never un-sells anything.
+
 ## If something is badly broken mid-workshop
 
 ```bash
