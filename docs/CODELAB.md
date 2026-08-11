@@ -166,7 +166,7 @@ PLACEHOLDER: PICTURE
 
 
 
-## You cannot prompt your way to autonomy
+## Prompt your way to autonomy?
 
 An instruction is text. ADK hands it to the model at the moment something calls the agent. So an instruction can never be the thing that does the calling. In this step you try to write your way around that.
 
@@ -464,7 +464,7 @@ So write that something in the next step. Allow forty lines.
 
 ---
 
-## Give it a clock
+## Event-Driven Dormancy
 
 
 > **What this step teaches**
@@ -721,7 +721,7 @@ It bought *something*. Look at what it had to guess. It picked Amsterdam and sec
 
 ---
 
-## Open the box
+## Managing Context Lifetime
 
 
 
@@ -1123,7 +1123,7 @@ In `two-days-ago` you saw a summary sitting where somebody's first few turns use
 
 ---
 
-## What the summary throws away
+## Context Degradation?
 
 
 > **What this step teaches**
@@ -1442,7 +1442,7 @@ Here is why. Keep state out of the conversation and no summary touches it. Check
 
 ---
 
-## Pull the plug
+## Process Resumption
 
 
 
@@ -1664,7 +1664,7 @@ ResumabilityConfig(is_resumable=True)         # the run may pause and be picked 
 
 ---
 
-## Acting on old news
+## Staleness & Idempotency
 
 
 
@@ -1946,7 +1946,7 @@ Check the order count. It stays at **1**.
 
 ---
 
-## Draw the flow in advance
+## Autonomous Workflow
 
 
 
@@ -2209,7 +2209,7 @@ Rules:
 
 ---
 
-## Agree a budget, then hold the line
+## Working With a Human
 
 
 
@@ -2531,7 +2531,7 @@ scheduler does not, and the same deployed service handles both.</pre>
 
 ---
 
-## Give it a permanent home
+## The Cloud Stack
 
 > **What this step teaches**
 >

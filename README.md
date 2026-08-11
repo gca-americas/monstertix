@@ -39,15 +39,15 @@ Each one adds a single idea, and each has complete working code in `solutions/`.
 | # | Step | What it adds |
 |---|---|---|
 | 1 | Before you begin | setup, the venue, the seeded history |
-| 2 | You cannot prompt your way to autonomy | why no wording makes an agent proactive |
-| 3 | Give it a clock | a trigger endpoint, and something that calls it |
-| 4 | Open the box | four places a fact can live: `temp:`, session, `user:`, a file |
-| 5 | What the summary throws away | compaction rewrites history behind your back |
-| 6 | Pull the plug | `LongRunningFunctionTool` + `ResumabilityConfig` |
-| 7 | Acting on old news | `before_tool_callback`, and idempotency keys |
-| 8 | Draw the flow in advance | `Workflow` graphs, and `RequestInput` interrupts |
-| 9 | Agree a budget, then hold the line | human-in-the-loop inside a graph |
-| 10 | Give it a permanent home | one Cloud Run service, Cloud SQL, Cloud Storage, Pub/Sub, Scheduler |
+| 2 | Prompt your way to autonomy? | why no wording makes an agent proactive |
+| 3 | Event-Driven Dormancy | a trigger endpoint, and something that calls it |
+| 4 | Managing Context Lifetime | four places a fact can live: `temp:`, session, `user:`, a file |
+| 5 | Context Degradation? | compaction rewrites history behind your back |
+| 6 | Process Resumption | `LongRunningFunctionTool` + `ResumabilityConfig` |
+| 7 | Staleness & Idempotency | `before_tool_callback`, and idempotency keys |
+| 8 | Autonomous Workflow | `Workflow` graphs, and `RequestInput` interrupts |
+| 9 | Working With a Human | human-in-the-loop inside a graph |
+| 10 | The Cloud Stack | one Cloud Run service, Cloud SQL, Cloud Storage, Pub/Sub, Scheduler |
 | 11 | What you built | the concept map, and a prompt for building your own |
 
 ---

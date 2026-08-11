@@ -193,7 +193,7 @@ own version rather than running `use-solution.sh`, this is where they will get
 stuck and you will be asked why.
 
 
-### You cannot prompt your way to autonomy
+### Prompt your way to autonomy?
 
 > Add a `purchase` tool to an ADK agent. It POSTs to `/purchase` on a service at
 > `$VENUE_URL` with `{event_id, section, seats}` and returns the order or an
@@ -203,7 +203,7 @@ stuck and you will be asked why.
 **Gets wrong:** Docstrings are the tool schema, so an assistant will happily invent parameters that sound plausible. We shipped a `search_events(artist=...)` for a venue that sells one artist, and the model dutifully asked *"which artist?"* instead of calling anything. **Read every generated docstring as if you were the model.**
 
 
-### Give it a clock
+### Event-Driven Dormancy
 
 > Two files, and keep them separate.
 >
@@ -217,7 +217,7 @@ stuck and you will be asked why.
 **Gets wrong:** Ask for them in one file and you will get one file, with the clock and the Runner tangled together. Naming the separation in the prompt is what keeps `clock.py` free of ADK — and that is the only reason you can delete it later and put Cloud Scheduler in its place.
 
 
-### Open the box
+### Managing Context Lifetime
 
 > Implement `BaseMemoryService` from `google.adk.memory` backed by a Markdown
 > file per user. `add_session_to_memory` appends the user's turns under a dated
@@ -234,7 +234,7 @@ write `asyncio.run()` inside a sync tool, which always raises inside ADK. Also:
 ask for "memory" without naming `BaseMemoryService` and you will get a dictionary, or a vector database you did not want. **Name the interface.** Also check the state prefixes — assistants write `state["prefs"]` when you meant `state["user:prefs"]`, and the difference only shows up two steps later.
 
 
-### What the summary throws away
+### Context Degradation?
 
 > Wrap my ADK agent in an `App` with `EventsCompactionConfig` so older turns get
 > summarised, and add a `budget_split` sub-agent that does ticket arithmetic with
@@ -244,7 +244,7 @@ ask for "memory" without naming `BaseMemoryService` and you will get a dictionar
 **Gets wrong:** `EventsCompactionConfig` requires **both** `compaction_interval` and `overlap_size` — there is no default for the second, and an assistant working from memory will omit it. `compaction_interval` also counts *invocations*, not events; ask for "every 20 events" and you will get something that never fires during a workshop.
 
 
-### Pull the plug
+### Process Resumption
 
 > Make the queue-joining tool a `LongRunningFunctionTool` that returns
 > immediately with a ticket, and turn on `ResumabilityConfig(is_resumable=True)`
@@ -254,7 +254,7 @@ ask for "memory" without naming `BaseMemoryService` and you will get a dictionar
 **Gets wrong:** Two things get fumbled. Assistants suggest `--session_service_uri=sqlite:///...`, which builds an engine that fails on the first write — ADK drives SQLAlchemy through its **asyncio** extension, so it must be `sqlite+aiosqlite://` with `aiosqlite` and `greenlet` installed. And they will write the poller as a loop *inside the agent*, which is the one arrangement that defeats the point.
 
 
-### Acting on old news
+### Staleness & Idempotency
 
 > Add a `before_tool_callback` that runs before any purchase: re-fetch live
 > inventory, and short-circuit with an explanatory dict if the seats are gone or

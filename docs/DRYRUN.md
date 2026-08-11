@@ -61,7 +61,7 @@ Press **RESET THE VENUE** on the panel whenever inventory gets messy. Delete
 
 ---
 
-## Step 2 · You cannot prompt your way to autonomy
+## Step 2 · Prompt your way to autonomy?
 
 **Load** `step2_asleep`
 
@@ -92,7 +92,7 @@ restart, and **do not type anything**.
 > keep an eye on that and let you know!" — which is worse than saying nothing,
 > and worth pointing at when it happens.
 
-## Step 3 · Give it a clock
+## Step 3 · Event-Driven Dormancy
 
 **No code change** — same `step2_asleep`. Put `instruction=INSTRUCTION` back first.
 
@@ -118,7 +118,7 @@ restart, and **do not type anything**.
 
 ---
 
-## Step 4 · Open the box
+## Step 4 · Managing Context Lifetime
 
 **Load** `step4_open_the_box`
 
@@ -147,7 +147,7 @@ restart, and **do not type anything**.
 
 ---
 
-## Step 5 · What the summary throws away
+## Step 5 · Context Degradation?
 
 **Load** `step5_compaction`
 
@@ -173,7 +173,7 @@ chance it books **Tuesday**.
 
 ---
 
-## Step 6 · Pull the plug
+## Step 6 · Process Resumption
 
 **Load** `step6_pull_the_plug`
 
@@ -196,7 +196,7 @@ chance it books **Tuesday**.
 
 ---
 
-## Step 7 · Acting on old news
+## Step 7 · Staleness & Idempotency
 
 **Load** `step7_old_news`
 
@@ -218,7 +218,7 @@ WAIT**, then tell it to buy section A.
 
 ---
 
-## Step 8 · Draw the flow in advance
+## Step 8 · Autonomous Workflow
 
 **Load** `step8_the_workflow`:
 
@@ -248,7 +248,7 @@ and run again.
 
 ---
 
-## Step 9 · Agree a budget, then hold the line
+## Step 9 · Working With a Human
 
 **Load** `step9_the_budget`
 
@@ -287,7 +287,7 @@ and run again.
 
 ---
 
-## Step 10 · The 3am run
+## Step 10 · The Cloud Stack
 
 **Load** `step10_deploy` — concert + `server.py`.
 
