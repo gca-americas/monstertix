@@ -31,6 +31,8 @@ This workshop walks you through the concert ticket scenario, and through the thi
 
 ### What you'll build
 
+![What you are building](img/overview.png)
+
 A ticket-buying agent that:
 
 - Joins a queue of 14,203 people, **pauses**, and is woken from outside forty minutes later
@@ -93,14 +95,10 @@ any number of times:
      re-clone or a shell timeout does not ask again
   4. run `gcloud auth application-default login` ONLY if there are no
      credentials already
-  5. set the quota project
-  6. enable these APIs, skipping any already enabled:
+  5. enable these APIs, skipping any already enabled:
      aiplatform, run, cloudbuild, artifactregistry, storage, pubsub,
      cloudscheduler, cloudtrace, logging, sqladmin
-  7. write a .env with the project, region and model id
-  8. make one real Gemini call, so a bad project or model id fails HERE
-     rather than twenty minutes later
-  9. print a one-line summary per step, with a tick or a cross
+  6. write a .env with the project, region and model id
 
 Rules:
   - never use an API key. Vertex AI with Application Default Credentials only
@@ -108,11 +106,6 @@ Rules:
     duplicates
   - do not use ${VAR:-default} for values I want pinned; a stale export in my
     shell must not win over the value the script sets</pre>
-<b>Check by hand:</b> step 8. A setup script that never makes a real model call will happily "succeed" against a project that cannot serve your model, and you find out in front of the room.
-</aside>
-
-<aside class="positive">
-<b>👀 Developer's Note:</b> Your project id is saved to <code>~/project_id.txt</code>, which in Cloud Shell survives the idle timeout and a re-clone of this repo, so setup never asks twice. To change it later: <code>rm ~/project_id.txt && ./setup.sh</code>, or <code>PROJECT_ID=other-project ./setup.sh</code>.
 </aside>
 
 👉💻 Activate the environment:
@@ -129,54 +122,9 @@ Your prompt now starts with `(.venv)`.
 </aside>
 
 
-### Start the rig
-
-We'll start by testing the Developer Tooling. **`adk web`** is the development UI that ships with ADK. It lets you talk to the agent you are building without writing a frontend first, and it shows you what a chat window cannot: every tool call and its arguments, the session state as it changes, the artifacts the agent saved, and the raw events underneath. You would not expose it in production. It is the best window into a running agent while you are learning, which is exactly what you need for the next two hours. In step 3 you build the frontend you would actually expose, and in the final step you deploy it.
-
-👉💻 **Terminal 1** — load the starting agent, then start the development UI:
-
-```bash
-cd ~/longrunningag
-. ./set_env.sh
-./use-solution.sh 1 --force
-adk web agent --port 8000
-```
-
-`use-solution.sh` copies a step's finished code into `agent/`, which is where you work. Every step starts with it, so nobody is ever more than one command behind, and it prints which files it changed so you know what to read.
-It also resets the state around that code — `memory/userx.md` back to its starting file, `sessions.db` rebuilt with the seeded conversation back in it, `artifacts/` emptied. The agent writes to all three as it runs, so without this a step behaves differently the second time you try it. Pass `--keep` if you want the code and none of that.
-
 <aside class="negative">
-<b>⚠️ When running use-solution.sh. Stop <code>adk web</code> first.</b> Deleting <code>sessions.db</code> while it is open does not produce an error — the running process just keeps writing to a file that no longer has a name, and the next thing that looks strange costs you an hour. <code>use-solution.sh</code> checks port 8000 and refuses rather than let that happen.
+<b>⚠️ Give the venue a minute.</b> Cloud Run starts it from cold, so the first load can look like a dead link. Wait, reload, and it is there.
 </aside>
-
-What you start with:
-
-| File | What it is |
-|---|---|
-| `agent.py` | the agent — a name, a model, an instruction, a list of tools |
-| `tools.py` | `search_events` and `get_seatmap` |
-| `venue.py` | an HTTP client for the venue. Nothing interesting |
-| `config.py` | which model to use, and a check that your credentials work |
-
-`. ./set_env.sh` activates the virtualenv, loads your project and model, and exports `$WORKSHOP` — the absolute path to `~/longrunningag`. Run it in **every** terminal you open. It prints what it set:
-
-```
-  folder   /home/you/longrunningag
-  project  vibeflix-test-3
-  model    gemini-2.5-flash
-  venue    https://venue-yourname-xxxx.run.app
-```
-
-👉 Open **first browser tabs**:
-
-| Where | What it is |
-|---|---|
-| **localhost:8000** | `adk web` — your agent, plus its State / Events / Artifacts tabs |
-
-<aside class="positive">
-<b>👀 Developer's Note — why <code>adk web agent</code> and not <code>adk web .</code></b> The argument is a directory that holds agent <i>packages</i>. Point it at the repo root and <code>venue</code>, <code>trigger</code> and <code>solutions</code> all appear in the dropdown as entries that error when picked. <code>agent/</code> contains exactly one package, so the dropdown has exactly one entry.
-</aside>
-
 
 ### The concert you want to go to
 
@@ -218,60 +166,95 @@ PLACEHOLDER: PICTURE
 
 
 
-### Look at what your venue sells
+## You cannot prompt your way to autonomy
 
-Start on the **venue tab** at `/panel`:
+An instruction is text. ADK hands it to the model at the moment something calls the agent. So an instruction can never be the thing that does the calling. In this step you try to write your way around that.
 
-> ## The Midnight Signal
-> *The only artist this venue sells.*
+![Where this step sits](img/step2-overview.png)
 
-| CITY | WHEN | A · LOWER | B · UPPER | C · GA |
-|---|---|---|---|---|
-| Amsterdam | **Tue 10 Nov ·weeknight** | 400 · $200 | 900 · $135 | 1,200 · $85 |
-| Amsterdam | Sat 14 Nov | 400 · $210 | 900 · $145 | 1,200 · $95 |
-| New York | **Tue 17 Nov ·weeknight** | 400 · $200 | 900 · $135 | 1,200 · $85 |
-| New York | Sat 21 Nov | 400 · $210 | 900 · $145 | 1,200 · $95 |
-| Tokyo | Sat 28 Nov | 400 · $210 | 900 · $145 | 1,200 · $95 |
-| Mexico City | **Tue 01 Dec ·weeknight** | 400 · $200 | 900 · $135 | 1,200 · $85 |
-| Mexico City | Sat 05 Dec | 400 · $210 | 900 · $145 | 1,200 · $95 |
-| Auckland | Sat 12 Dec | 400 · $210 | 900 · $145 | 1,200 · $95 |
+### Start the rig
 
-Eight shows, five cities, 2,500 seats each, three price tiers, and exactly one artist. The name at the top is the only one this venue knows about.
+We'll start by testing the developer tooling. **`adk web`** starts the **ADK web UI**, the development interface that ships with ADK. It lets you talk to the agent you are building without writing a frontend first, and it shows you what a chat window cannot: every tool call and its arguments, the session state as it changes, the artifacts the agent saved, and the raw events underneath. You would not expose it in production. It is the best window into a running agent while you are learning, which is exactly what you need for the next two hours. In step 3 you build the frontend you would actually expose, and in the final step you deploy it.
 
-**Every weeknight show is $10 a seat cheaper than the weekend one beside it, and it comes first in the list.** That is not decoration. It is the cheapest available option in each city, it is the one that appears first, and for this person it is the wrong answer every time.
+👉🔴 On the **venue panel**, press **RESET THE VENUE**. Every step starts from
+the same world: 8 shows, all seats available, clock at 1×.
 
-👉 Note the three rows marked **·weeknight** in amber. Remember they are there.
+👉💻 **Terminal 1** — load this step's code and start the **ADK web UI**:
 
-
-### Now ask the agent
-
-👉 Switch to **localhost:8000** browser tab. Check the dropdown in the top bar says **`concert`** — with only one app it selects itself.
-
-👉✨ Type this in the box at the bottom:
-
-```
-What shows are coming up?
+```bash
+cd ~/longrunningag
+. ./set_env.sh
+./use-solution.sh 2 --force
+adk web agent --port 8000
 ```
 
-Expect something like:
+`use-solution.sh` copies a step's finished code into `agent/`, which is where you work. Every step starts with it, so nobody is ever more than one command behind, and it prints which files it changed so you know what to read.
+It also resets the state around that code — `memory/userx.md` back to its starting file, `sessions.db` rebuilt with the seeded conversation back in it, `artifacts/` emptied. The agent writes to all three as it runs, so without this a step behaves differently the second time you try it. Pass `--keep` if you want the code and none of that.
 
-> The Midnight Signal has shows coming up in Amsterdam, New York, Tokyo, Mexico City and Auckland.
+<aside class="negative">
+<b>⚠️ When running use-solution.sh. Stop <code>adk web</code> first.</b> Deleting <code>sessions.db</code> while it is open does not produce an error — the running process just keeps writing to a file that no longer has a name, and the next thing that looks strange costs you an hour. <code>use-solution.sh</code> checks port 8000 and refuses rather than let that happen.
+</aside>
 
-The same five cities you just read off the panel. The agent found out by calling `search_events`, which fetches the tour from the venue. That is the only way it knows anything in this workshop.
+What you start with:
 
+| File | What it is |
+|---|---|
+| `agent.py` | the agent — a name, a model, an instruction, a list of tools |
+| `tools.py` | `search_events` and `get_seatmap` |
+| `venue.py` | an HTTP client for the venue. Nothing interesting |
+| `config.py` | which model to use, and a check that your credentials work |
+
+`. ./set_env.sh` activates the virtualenv, loads your project and model, and exports `$WORKSHOP` — the absolute path to `~/longrunningag`. Run it in **every** terminal you open. It prints what it set:
+
+```
+  folder   /home/you/longrunningag
+  project  vibeflix-test-3
+  model    gemini-2.5-flash
+  venue    https://venue-yourname-xxxx.run.app
+```
+
+👉 Open **first browser tabs**:
+
+| Where | What it is |
+|---|---|
+| **ADK web UI** | `localhost:8000` — your agent, plus its State / Events / Artifacts tabs |
+
+<aside class="positive">
+<b>👀 Developer's Note — why <code>adk web agent</code> and not <code>adk web .</code></b> The argument is a directory that holds agent <i>packages</i>. Point it at the repo root and <code>venue</code>, <code>trigger</code> and <code>solutions</code> all appear in the dropdown as entries that error when picked. <code>agent/</code> contains exactly one package, so the dropdown has exactly one entry.
+</aside>
+
+
+### Talk to it
+
+👉✨ In the **ADK web UI**, type:
+
+```
+I want to see The Midnight Signal. I'm in Amsterdam, going with Sam, budget around $200 each.
+```
+
+It searches the tour, reads seat maps, and reasons about your budget and your company. This is a genuinely capable assistant.
+Now close the laptop. The presale opens at 10:00 on Tuesday and you are at work.
+
+**NOTHING HAPPENS!**
+
+It did not run at 10:00. **It was never running during the on-sale at all.** Nothing attempted anything.
 
 ### Read what just happened
 
 The middle of the screen is not only a chat log. Every step of the turn is numbered, tool calls included:
 
 ```
-#1  ▸ What shows are coming up?                     ← you
-#2  ⚡ search_events({})                              ← the model chose a tool
-#3  ✓ search_events                                  ← the venue answered
-#4    The Midnight Signal has shows coming up in ...  ← the reply
+#1  ▸ I want to see The Midnight Signal. I'm in Amsterdam...   ← you
+#2  ⚡ recall({})                                              ← it looks you up
+#3  ✓ recall                                                   ← the memory file
+#4  ⚡ search_events({"city": "Amsterdam"})                     ← the model chose a tool
+#5  ✓ search_events                                            ← the venue answered
+#6    Two Amsterdam shows: Tuesday 10 Nov and Saturday 14 ...   ← the reply
 ```
 
-👉 Click **#2**. The left panel shows the arguments the model picked — none, in this case. Click **#3** for the JSON the venue sent back.
+👉 Click a **⚡** row. The left panel shows the arguments the model picked. Click the **✓** underneath it for the JSON that came back.
+
+**The agent did not know any of this.** The Midnight Signal is invented, so there is nothing about it in the model's training data, and the tour is not in the prompt either. It found out the only way it could: it called `search_events`, and your venue answered.
 
 Use that numbered stream to diagnose everything for the rest of the day.
 
@@ -325,13 +308,14 @@ def search_events(city: str = "", weekday: str = "") -> dict:
 
 An ordinary function. No decorator, no registration, no schema to write. ADK reads the signature and the docstring and builds the tool definition the model sees — which is why that docstring is load-bearing, and why deleting one argument changed the model's behaviour.
 
-**The model never runs your code.** When you clicked `#2` and saw `search_events({})`, the model was *asking* for that call. ADK ran the function, handed the result back, and the model wrote a sentence about it. The loop is:
+**The model never runs your code.** When you clicked `#4` and saw `search_events({"city": "Amsterdam"})`, the model was *asking* for that call. ADK ran the function, handed the result back, and the model wrote a sentence about it. The loop is:
 
-```
-   model decides  →  ADK calls your Python  →  result returned  →  model replies
-```
+PLACEaHOLDER
 
-PLACEHOLDER - PICTURE
+**Read the loop clockwise and notice who does what.** The model only ever
+produces text: sometimes a sentence for you, sometimes a request to call
+something. ADK is what turns that request into a Python call, and your function
+is the only thing in the picture that touches the outside world.
 
 
 
@@ -383,47 +367,6 @@ config.py
 </aside>
 
 ---
-
-## You cannot prompt your way to autonomy
-
-> **What this step teaches**
->
-> An instruction is text. ADK hands it to the model at the moment something
-> calls the agent. So an instruction can never be the thing that does the
-> calling. In this step you try to write your way around that, and watch it
-> fail.
-
-👉🔴 On the **venue panel**, press **RESET THE VENUE**. Every step starts from
-the same world: 8 shows, all seats available, clock at 1×.
-
-👉💻 Load this step's code, and restart the agent in **terminal 1**:
-
-```bash
-cd ~/longrunningag
-./use-solution.sh 2 --force
-```
-
-What changed since the last step:
-
-| File | What changed |
-|---|---|
-| `tools.py` | added `purchase`. The agent can now spend money |
-| `agent.py` | `purchase` added to the tool list, and a second instruction written for you to try later |
-
-The `purchase` tool gives your agent the ability to actually buy a ticket.
-
-👉✨ In the chat at **:8000**, type:
-
-```
-I want to see The Midnight Signal. I'm in Amsterdam, going with Sam, budget around $200 each.
-```
-
-It searches the tour, reads seat maps, and reasons about your budget and your company. This is a genuinely capable assistant.
-Now close the laptop. The presale opens at 10:00 on Tuesday and you are at work.
-
-**NOTHING HAPPENS!**
-
-It did not run at 10:00. **It was never running during the on-sale at all.** Nothing attempted anything.
 
 ### So tell it not to sleep
 
@@ -561,7 +504,7 @@ It has two halves, and they stay in two files all the way to the cloud:
 
 ### The trigger — your own web server
 
-Yes, a web server. Something has to be *listening* before anything can call it. The `adk web` from the previous steps is a development UI that happens to be able to run an agent.
+Yes, a web server. Something has to be *listening* before anything can call it. The **ADK web UI** from the previous steps is a development interface that happens to be able to run an agent.
 
 👉💻 Open `monstertix/server.py`:
 
@@ -602,7 +545,7 @@ An `Agent` does not run itself. It is a description: a name, a model, an instruc
             session store ◄── every step written down
 ```
 
-`adk web` has a default one for you. Here you build it yourself, and that is the entire difference between a development UI and something you can deploy. 
+The **ADK web UI** has a default one for you. Here you build it yourself, and that is the entire difference between the **ADK web UI** and something you can deploy. 
 
 👉💻 **Terminal 2** — start it:
 
@@ -1332,9 +1275,9 @@ what if 10 people come and I can only do $120 each?
 
 ### What you cannot see: the summary
 
-Somewhere in those turns, ADK summarised the earlier ones. **Do not expect the dev UI to show you that**, and understand why.
+Somewhere in those turns, ADK summarised the earlier ones. **Do not expect the ADK web UI to show you that**, and understand why.
 
-A compaction record is an event whose summary lives in `actions.compaction`, and it carries no message content. The dev UI draws events from their content, so a compaction event renders as nothing at all: one of the blank numbered rows in the stream.
+A compaction record is an event whose summary lives in `actions.compaction`, and it carries no message content. The ADK web UI draws events from their content, so a compaction event renders as nothing at all: one of the blank numbered rows in the stream.
 
 Notice your conversation still shows every turn, because the UI shows what is *stored*. Keep the two apart: compaction changes what gets **sent to the model** on the next turn. Storage keeps everything. The prompt does not.
 
@@ -2053,7 +1996,7 @@ every time and watch the graph change instead.
 
 #### 1. Notice what you are now talking to
 
-👉 Reload **localhost:8000**. The dropdown still says `concert` — but what
+👉 Reload the **ADK web UI**. The dropdown still says `concert` — but what
 answers is no longer the agent you have been chatting with:
 
 ```python
@@ -2411,7 +2354,7 @@ nightly = Workflow(
 
 #### 1. Start it
 
-👉 Reload **localhost:8000** and pick `concert` agent.
+👉 Reload the **ADK web UI** and pick the `concert` agent.
 
 👉✨ Ask for what you actually want:
 
@@ -2632,7 +2575,7 @@ cd ~/longrunningag
 Go back to the chat page from step 3. It has been sitting there since, waiting
 for this step.
 
-`adk web` is a developer tool. The State tab, the event stream and the graph are
+The **ADK web UI** is a developer tool. The State tab, the event stream and the graph are
 what you want while you are learning, and none of it is something you hand to
 another person. It does not exist on Cloud Run either.
 
@@ -2846,7 +2789,7 @@ Read the plan before approving. The point of naming all five resources is that y
 
 ### Talk to it
 
-👉 Open the agent's URL in a browser. Not `/panel`, not `:8000` — the service
+👉 Open the agent's URL in a browser. Not the venue panel, not the **ADK web UI** — the service
 you just deployed. This is MonsterTix, on the internet, with nothing of your
 laptop involved.
 

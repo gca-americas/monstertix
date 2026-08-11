@@ -35,10 +35,10 @@
   </style>
 </head>
 <body class="color-scheme--light">
-  <google-codelab id="long-running-agent-concert-tickets"
+  <google-codelab id="monstertix"
                   title="Everything You Need to Build Long-Running Agents on Google Cloud"
                   authors="Christina Lin"
-                  duration="120"
+                  duration="0"
                   environment="web"
                   feedback-link="">
     
@@ -46,7 +46,7 @@
       
       <google-codelab-about codelab-title="Everything You Need to Build Long-Running Agents on Google Cloud"
                             authors="Christina Lin"
-                            last-updated="2026-08-10T10:26:59Z">
+                            last-updated="2026-08-11T10:45:10Z">
       </google-codelab-about>
       
       <p>Most ticketing sites these days put you in a queue, partly to stop the site falling over and partly to make the sale fairer. So you start your purchase and find yourself behind fourteen thousand people. The queue moves for forty minutes. When your turn finally comes you get a few minutes to pick seats and pay, and if you are not there in that window, the queue gives your place away. It is a long, frustrating wait, and it demands you be there the whole time. So people sit with a browser tab open for an hour, doing nothing, in case it is their turn.</p>
@@ -56,9 +56,10 @@ This is why you need a <strong>long-running agent</strong>.</p>
 <p>Most agents you build today live inside a chat turn. A chat turn does not last forty minutes, and nothing about it is proactive. Something has to run the agent while nobody is talking to it, and remind it why it was running when it wakes up.</p>
 <p>This workshop walks you through the concert ticket scenario, and through the things you need to know to build agents like this.</p>
 <aside class="negative">
-<p><b>⚠️ ETHICAL DISCLAIMER: Ticket bots are a real problem (we hate them!) and real ticketing sites prohibit automation.</b> This workshop runs against a <b>mock venue service</b>, buying <b>one</b> allotment for <b>yourself</b>, inside limits you set.</p>
+<p><b>⚠️ ETHICAL DISCLAIMER:<br/> Ticket bots are a real problem (we hate them!) and real ticketing sites prohibit automation.</b> This workshop runs against a <b>mock venue service</b>, buying <b>one</b> allotment for <b>yourself</b>, inside limits you set.</p>
 </aside>
 <h3>What you'll build</h3>
+<p><img src="img/overview.png" alt="What you are building"></p>
 <p>A ticket-buying agent that:</p>
 <ul>
 <li>Joins a queue of 14,203 people, <strong>pauses</strong>, and is woken from outside forty minutes later</li>
@@ -144,14 +145,10 @@ any number of times:
      re-clone or a shell timeout does not ask again
   4. run `gcloud auth application-default login` ONLY if there are no
      credentials already
-  5. set the quota project
-  6. enable these APIs, skipping any already enabled:
+  5. enable these APIs, skipping any already enabled:
      aiplatform, run, cloudbuild, artifactregistry, storage, pubsub,
      cloudscheduler, cloudtrace, logging, sqladmin
-  7. write a .env with the project, region and model id
-  8. make one real Gemini call, so a bad project or model id fails HERE
-     rather than twenty minutes later
-  9. print a one-line summary per step, with a tick or a cross
+  6. write a .env with the project, region and model id
 
 Rules:
   - never use an API key. Vertex AI with Application Default Credentials only
@@ -159,10 +156,6 @@ Rules:
     duplicates
   - do not use ${VAR:-default} for values I want pinned; a stale export in my
     shell must not win over the value the script sets</pre>
-<p><b>Check by hand:</b> step 8. A setup script that never makes a real model call will happily &quot;succeed&quot; against a project that cannot serve your model, and you find out in front of the room.</p>
-</aside>
-<aside class="positive">
-<p><b>👀 Developer's Note:</b> Your project id is saved to <code>~/project_id.txt</code>, which in Cloud Shell survives the idle timeout and a re-clone of this repo, so setup never asks twice. To change it later: <code>rm ~/project_id.txt &amp;&amp; ./setup.sh</code>, or <code>PROJECT_ID=other-project ./setup.sh</code>.</p>
 </aside>
 <p>👉💻 Activate the environment:</p>
 <pre><code class="language-bash">cd ~/longrunningag
@@ -172,12 +165,60 @@ source .venv/bin/activate
 <aside class="negative">
 <p><b>⚠️ A new terminal tab starts deactivated.</b> If you ever see <code>adk: command not found</code>, run <code>source .venv/bin/activate</code> again in that tab.</p>
 </aside>
+<aside class="negative">
+<p><b>⚠️ Give the venue a minute.</b> Cloud Run starts it from cold, so the first load can look like a dead link. Wait, reload, and it is there.</p>
+</aside>
+<h3>The concert you want to go to</h3>
+<p>Here is your plan for getting the tickets. You want to see The Midnight Signal, along with Sam and maybe Priya. Sam cannot do weeknights, having bailed on every single one. You live in Amsterdam, and you remember the upper bowl at Ziggo being bad last time. Two hundred a ticket is a lot of money, but you reckon you can save up for it.</p>
+<p>PLACEHOLDER: PICTURE</p>
+<h3>Verify your installation</h3>
+<p>👉💻 One command, eight ticks:</p>
+<pre><code class="language-bash">./verify.sh
+</code></pre>
+<pre><code>  Checking the rig
+
+  ✓ adk installed                      adk, version 2.6.2
+  ✓ adk 2 apis                         App + ResumabilityConfig
+  ✓ workflow graphs                    Workflow + node
+  ✓ async sqlite drivers               sqlalchemy + aiosqlite + greenlet
+  ✓ project                            your-project-id
+  ✓ vertex ai                          no API keys anywhere
+  ✓ seeded session                     13 events, two days old
+  ✓ venue                              https://venue-you-xxxx.us-central1.run.app
+
+  Ready. Cloud SQL is still building in the background and nothing
+  before step 10 needs it.
+</code></pre>
+<p>👉 Open <strong>second browser tabs</strong>:</p>
+<table>
+<thead>
+<tr>
+<th>Where</th>
+<th>What it is</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong><code>$VENUE_URL/panel</code></strong></td>
+<td>The control panel, your buttons. <code>setup.sh</code> printed this URL and put it in <code>.env</code></td>
+</tr>
+</tbody>
+</table>
+
+    </google-codelab-step>
+    
+    <google-codelab-step label="You cannot prompt your way to autonomy" duration="0">
+      
+      <p>An instruction is text. ADK hands it to the model at the moment something calls the agent. So an instruction can never be the thing that does the calling. In this step you try to write your way around that.</p>
+<p><img src="img/step2-overview.png" alt="Where this step sits"></p>
 <h3>Start the rig</h3>
-<p>We'll start by testing the Developer Tooling. <strong><code>adk web</code></strong> is the development UI that ships with ADK. It lets you talk to the agent you are building without writing a frontend first, and it shows you what a chat window cannot: every tool call and its arguments, the session state as it changes, the artifacts the agent saved, and the raw events underneath. You would not expose it in production. It is the best window into a running agent while you are learning, which is exactly what you need for the next two hours. In step 3 you build the frontend you would actually expose, and in the final step you deploy it.</p>
-<p>👉💻 <strong>Terminal 1</strong> — load the starting agent, then start the development UI:</p>
+<p>We'll start by testing the developer tooling. <strong><code>adk web</code></strong> starts the <strong>ADK web UI</strong>, the development interface that ships with ADK. It lets you talk to the agent you are building without writing a frontend first, and it shows you what a chat window cannot: every tool call and its arguments, the session state as it changes, the artifacts the agent saved, and the raw events underneath. You would not expose it in production. It is the best window into a running agent while you are learning, which is exactly what you need for the next two hours. In step 3 you build the frontend you would actually expose, and in the final step you deploy it.</p>
+<p>👉🔴 On the <strong>venue panel</strong>, press <strong>RESET THE VENUE</strong>. Every step starts from
+the same world: 8 shows, all seats available, clock at 1×.</p>
+<p>👉💻 <strong>Terminal 1</strong> — load this step's code and start the <strong>ADK web UI</strong>:</p>
 <pre><code class="language-bash">cd ~/longrunningag
 . ./set_env.sh
-./use-solution.sh 1 --force
+./use-solution.sh 2 --force
 adk web agent --port 8000
 </code></pre>
 <p><code>use-solution.sh</code> copies a step's finished code into <code>agent/</code>, which is where you work. Every step starts with it, so nobody is ever more than one command behind, and it prints which files it changed so you know what to read.
@@ -228,146 +269,33 @@ It also resets the state around that code — <code>memory/userx.md</code> back 
 </thead>
 <tbody>
 <tr>
-<td><strong>localhost:8000</strong></td>
-<td><code>adk web</code> — your agent, plus its State / Events / Artifacts tabs</td>
+<td><strong>ADK web UI</strong></td>
+<td><code>localhost:8000</code> — your agent, plus its State / Events / Artifacts tabs</td>
 </tr>
 </tbody>
 </table>
 <aside class="positive">
 <p><b>👀 Developer's Note — why <code>adk web agent</code> and not <code>adk web .</code></b> The argument is a directory that holds agent <i>packages</i>. Point it at the repo root and <code>venue</code>, <code>trigger</code> and <code>solutions</code> all appear in the dropdown as entries that error when picked. <code>agent/</code> contains exactly one package, so the dropdown has exactly one entry.</p>
 </aside>
-<h3>The concert you want to go to</h3>
-<p>Here is your plan for getting the tickets. You want to see The Midnight Signal, along with Sam and maybe Priya. Sam cannot do weeknights, having bailed on every single one. You live in Amsterdam, and you remember the upper bowl at Ziggo being bad last time. Two hundred a ticket is a lot of money, but you reckon you can save up for it.</p>
-<p>PLACEHOLDER: PICTURE</p>
-<h3>Verify your installation</h3>
-<p>👉💻 One command, eight ticks:</p>
-<pre><code class="language-bash">./verify.sh
+<h3>Talk to it</h3>
+<p>👉✨ In the <strong>ADK web UI</strong>, type:</p>
+<pre><code>I want to see The Midnight Signal. I'm in Amsterdam, going with Sam, budget around $200 each.
 </code></pre>
-<pre><code>  Checking the rig
-
-  ✓ adk installed                      adk, version 2.6.2
-  ✓ adk 2 apis                         App + ResumabilityConfig
-  ✓ workflow graphs                    Workflow + node
-  ✓ async sqlite drivers               sqlalchemy + aiosqlite + greenlet
-  ✓ project                            your-project-id
-  ✓ vertex ai                          no API keys anywhere
-  ✓ seeded session                     13 events, two days old
-  ✓ venue                              https://venue-you-xxxx.us-central1.run.app
-
-  Ready. Cloud SQL is still building in the background and nothing
-  before step 10 needs it.
-</code></pre>
-<p>👉 Open <strong>second browser tabs</strong>:</p>
-<table>
-<thead>
-<tr>
-<th>Where</th>
-<th>What it is</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><strong><code>$VENUE_URL/panel</code></strong></td>
-<td>The control panel, your buttons. <code>setup.sh</code> printed this URL and put it in <code>.env</code></td>
-</tr>
-</tbody>
-</table>
-<h3>Look at what your venue sells</h3>
-<p>Start on the <strong>venue tab</strong> at <code>/panel</code>:</p>
-<blockquote>
-<h2>The Midnight Signal</h2>
-<p><em>The only artist this venue sells.</em></p>
-</blockquote>
-<table>
-<thead>
-<tr>
-<th>CITY</th>
-<th>WHEN</th>
-<th>A · LOWER</th>
-<th>B · UPPER</th>
-<th>C · GA</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>Amsterdam</td>
-<td><strong>Tue 10 Nov ·weeknight</strong></td>
-<td>400 · $200</td>
-<td>900 · $135</td>
-<td>1,200 · $85</td>
-</tr>
-<tr>
-<td>Amsterdam</td>
-<td>Sat 14 Nov</td>
-<td>400 · $210</td>
-<td>900 · $145</td>
-<td>1,200 · $95</td>
-</tr>
-<tr>
-<td>New York</td>
-<td><strong>Tue 17 Nov ·weeknight</strong></td>
-<td>400 · $200</td>
-<td>900 · $135</td>
-<td>1,200 · $85</td>
-</tr>
-<tr>
-<td>New York</td>
-<td>Sat 21 Nov</td>
-<td>400 · $210</td>
-<td>900 · $145</td>
-<td>1,200 · $95</td>
-</tr>
-<tr>
-<td>Tokyo</td>
-<td>Sat 28 Nov</td>
-<td>400 · $210</td>
-<td>900 · $145</td>
-<td>1,200 · $95</td>
-</tr>
-<tr>
-<td>Mexico City</td>
-<td><strong>Tue 01 Dec ·weeknight</strong></td>
-<td>400 · $200</td>
-<td>900 · $135</td>
-<td>1,200 · $85</td>
-</tr>
-<tr>
-<td>Mexico City</td>
-<td>Sat 05 Dec</td>
-<td>400 · $210</td>
-<td>900 · $145</td>
-<td>1,200 · $95</td>
-</tr>
-<tr>
-<td>Auckland</td>
-<td>Sat 12 Dec</td>
-<td>400 · $210</td>
-<td>900 · $145</td>
-<td>1,200 · $95</td>
-</tr>
-</tbody>
-</table>
-<p>Eight shows, five cities, 2,500 seats each, three price tiers, and exactly one artist. The name at the top is the only one this venue knows about.</p>
-<p><strong>Every weeknight show is $10 a seat cheaper than the weekend one beside it, and it comes first in the list.</strong> That is not decoration. It is the cheapest available option in each city, it is the one that appears first, and for this person it is the wrong answer every time.</p>
-<p>👉 Note the three rows marked <strong>·weeknight</strong> in amber. Remember they are there.</p>
-<h3>Now ask the agent</h3>
-<p>👉 Switch to <strong>localhost:8000</strong> browser tab. Check the dropdown in the top bar says <strong><code>concert</code></strong> — with only one app it selects itself.</p>
-<p>👉✨ Type this in the box at the bottom:</p>
-<pre><code>What shows are coming up?
-</code></pre>
-<p>Expect something like:</p>
-<blockquote>
-<p>The Midnight Signal has shows coming up in Amsterdam, New York, Tokyo, Mexico City and Auckland.</p>
-</blockquote>
-<p>The same five cities you just read off the panel. The agent found out by calling <code>search_events</code>, which fetches the tour from the venue. That is the only way it knows anything in this workshop.</p>
+<p>It searches the tour, reads seat maps, and reasons about your budget and your company. This is a genuinely capable assistant.
+Now close the laptop. The presale opens at 10:00 on Tuesday and you are at work.</p>
+<p><strong>NOTHING HAPPENS!</strong></p>
+<p>It did not run at 10:00. <strong>It was never running during the on-sale at all.</strong> Nothing attempted anything.</p>
 <h3>Read what just happened</h3>
 <p>The middle of the screen is not only a chat log. Every step of the turn is numbered, tool calls included:</p>
-<pre><code>#1  ▸ What shows are coming up?                     ← you
-#2  ⚡ search_events({})                              ← the model chose a tool
-#3  ✓ search_events                                  ← the venue answered
-#4    The Midnight Signal has shows coming up in ...  ← the reply
+<pre><code>#1  ▸ I want to see The Midnight Signal. I'm in Amsterdam...   ← you
+#2  ⚡ recall({})                                              ← it looks you up
+#3  ✓ recall                                                   ← the memory file
+#4  ⚡ search_events({&quot;city&quot;: &quot;Amsterdam&quot;})                     ← the model chose a tool
+#5  ✓ search_events                                            ← the venue answered
+#6    Two Amsterdam shows: Tuesday 10 Nov and Saturday 14 ...   ← the reply
 </code></pre>
-<p>👉 Click <strong>#2</strong>. The left panel shows the arguments the model picked — none, in this case. Click <strong>#3</strong> for the JSON the venue sent back.</p>
+<p>👉 Click a <strong>⚡</strong> row. The left panel shows the arguments the model picked. Click the <strong>✓</strong> underneath it for the JSON that came back.</p>
+<p><strong>The agent did not know any of this.</strong> The Midnight Signal is invented, so there is nothing about it in the model's training data, and the tour is not in the prompt either. It found out the only way it could: it called <code>search_events</code>, and your venue answered.</p>
 <p>Use that numbered stream to diagnose everything for the rest of the day.</p>
 <h3>Open the code you just ran</h3>
 <p>You have seen it work and seen the trace. Now look at the thing itself.</p>
@@ -407,10 +335,12 @@ root_agent = Agent(
     return venue.get(&quot;/events&quot;, city=city, weekday=weekday)
 </code></pre>
 <p>An ordinary function. No decorator, no registration, no schema to write. ADK reads the signature and the docstring and builds the tool definition the model sees — which is why that docstring is load-bearing, and why deleting one argument changed the model's behaviour.</p>
-<p><strong>The model never runs your code.</strong> When you clicked <code>#2</code> and saw <code>search_events({})</code>, the model was <em>asking</em> for that call. ADK ran the function, handed the result back, and the model wrote a sentence about it. The loop is:</p>
-<pre><code>   model decides  →  ADK calls your Python  →  result returned  →  model replies
-</code></pre>
-<p>PLACEHOLDER - PICTURE</p>
+<p><strong>The model never runs your code.</strong> When you clicked <code>#4</code> and saw <code>search_events({&quot;city&quot;: &quot;Amsterdam&quot;})</code>, the model was <em>asking</em> for that call. ADK ran the function, handed the result back, and the model wrote a sentence about it. The loop is:</p>
+<p>PLACEaHOLDER</p>
+<p><strong>Read the loop clockwise and notice who does what.</strong> The model only ever
+produces text: sometimes a sentence for you, sometimes a request to call
+something. ADK is what turns that request into a Python call, and your function
+is the only thing in the picture that touches the outside world.</p>
 <p>👉 The icons down the far-left edge switch what the panel shows. The second one is the <strong>agent graph</strong> — try it and you should see two tools.:</p>
 <pre><code>        ┌──────────┐
         │ concert  │
@@ -451,51 +381,6 @@ config.py
 <p><b>Check by hand:</b> the <b>docstrings</b>. They are not comments here, they are the tool schema. And check that <code>venue.py</code> returns errors rather than raising: that is the difference between an agent that recovers and a run that dies.</p>
 </aside>
 <hr>
-
-    </google-codelab-step>
-    
-    <google-codelab-step label="You cannot prompt your way to autonomy" duration="0">
-      
-      <blockquote>
-<p><strong>What this step teaches</strong></p>
-<p>An instruction is text. ADK hands it to the model at the moment something
-calls the agent. So an instruction can never be the thing that does the
-calling. In this step you try to write your way around that, and watch it
-fail.</p>
-</blockquote>
-<p>👉🔴 On the <strong>venue panel</strong>, press <strong>RESET THE VENUE</strong>. Every step starts from
-the same world: 8 shows, all seats available, clock at 1×.</p>
-<p>👉💻 Load this step's code, and restart the agent in <strong>terminal 1</strong>:</p>
-<pre><code class="language-bash">cd ~/longrunningag
-./use-solution.sh 2 --force
-</code></pre>
-<p>What changed since the last step:</p>
-<table>
-<thead>
-<tr>
-<th>File</th>
-<th>What changed</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>tools.py</code></td>
-<td>added <code>purchase</code>. The agent can now spend money</td>
-</tr>
-<tr>
-<td><code>agent.py</code></td>
-<td><code>purchase</code> added to the tool list, and a second instruction written for you to try later</td>
-</tr>
-</tbody>
-</table>
-<p>The <code>purchase</code> tool gives your agent the ability to actually buy a ticket.</p>
-<p>👉✨ In the chat at <strong>:8000</strong>, type:</p>
-<pre><code>I want to see The Midnight Signal. I'm in Amsterdam, going with Sam, budget around $200 each.
-</code></pre>
-<p>It searches the tour, reads seat maps, and reasons about your budget and your company. This is a genuinely capable assistant.
-Now close the laptop. The presale opens at 10:00 on Tuesday and you are at work.</p>
-<p><strong>NOTHING HAPPENS!</strong></p>
-<p>It did not run at 10:00. <strong>It was never running during the on-sale at all.</strong> Nothing attempted anything.</p>
 <h3>So tell it not to sleep</h3>
 <p>What would you do to fix it? Try the thing most people reach for first. Recall <code>INSTRUCTION</code> from step 1, the prose handed to the model on every turn, and rewrite it.</p>
 <p>👉💻 Open <code>agent/concert/agent.py</code>. Below <code>INSTRUCTION</code> there is a second one, already written for you. Try changing it yourself if you like:</p>
@@ -623,7 +508,7 @@ nothing about the agent changes in this step. Hold onto that, it is the point.</
 </tbody>
 </table>
 <h3>The trigger — your own web server</h3>
-<p>Yes, a web server. Something has to be <em>listening</em> before anything can call it. The <code>adk web</code> from the previous steps is a development UI that happens to be able to run an agent.</p>
+<p>Yes, a web server. Something has to be <em>listening</em> before anything can call it. The <strong>ADK web UI</strong> from the previous steps is a development interface that happens to be able to run an agent.</p>
 <p>👉💻 Open <code>monstertix/server.py</code>:</p>
 <pre><code class="language-python">from google.adk.runners import Runner
 from google.adk.sessions import InMemorySessionService
@@ -657,7 +542,7 @@ async def wake(payload: dict = Body(default={})):
                  ▼            ▼
             session store ◄── every step written down
 </code></pre>
-<p><code>adk web</code> has a default one for you. Here you build it yourself, and that is the entire difference between a development UI and something you can deploy.</p>
+<p>The <strong>ADK web UI</strong> has a default one for you. Here you build it yourself, and that is the entire difference between the <strong>ADK web UI</strong> and something you can deploy.</p>
 <p>👉💻 <strong>Terminal 2</strong> — start it:</p>
 <p>Start the Runner,</p>
 <pre><code class="language-bash">cd ~/longrunningag
@@ -1356,8 +1241,8 @@ This one works:</p>
 <p>👉 Look at <code>budget_plan</code> again. It has been <strong>overwritten</strong>, not appended to. It's because <code>output_key</code> holds the latest one.</p>
 <p><img src="img/05-01-budget2.png" alt="budget_plan after the second budget question"></p>
 <h3>What you cannot see: the summary</h3>
-<p>Somewhere in those turns, ADK summarised the earlier ones. <strong>Do not expect the dev UI to show you that</strong>, and understand why.</p>
-<p>A compaction record is an event whose summary lives in <code>actions.compaction</code>, and it carries no message content. The dev UI draws events from their content, so a compaction event renders as nothing at all: one of the blank numbered rows in the stream.</p>
+<p>Somewhere in those turns, ADK summarised the earlier ones. <strong>Do not expect the ADK web UI to show you that</strong>, and understand why.</p>
+<p>A compaction record is an event whose summary lives in <code>actions.compaction</code>, and it carries no message content. The ADK web UI draws events from their content, so a compaction event renders as nothing at all: one of the blank numbered rows in the stream.</p>
 <p>Notice your conversation still shows every turn, because the UI shows what is <em>stored</em>. Keep the two apart: compaction changes what gets <strong>sent to the model</strong> on the next turn. Storage keeps everything. The prompt does not.</p>
 <p>👉💻 In a new <strong>Terminal</strong>, run to read it directly:</p>
 <pre><code class="language-bash">cd ~/longrunningag
@@ -1950,7 +1835,7 @@ adk web agent --port 8000 \
 <p>Do everything below in the <strong><code>nightly</code></strong> app, not <code>concert</code>. Send the same word
 every time and watch the graph change instead.</p>
 <h4>1. Notice what you are now talking to</h4>
-<p>👉 Reload <strong>localhost:8000</strong>. The dropdown still says <code>concert</code> — but what
+<p>👉 Reload the <strong>ADK web UI</strong>. The dropdown still says <code>concert</code> — but what
 answers is no longer the agent you have been chatting with:</p>
 <pre><code class="language-python"># concert/agent.py, at the bottom
 
@@ -1974,29 +1859,17 @@ Sending one is simply how <code>adk web</code> starts a run.</p>
 <p>Sit with that. You are typing into a chat box, and there is no conversation on
 the other side of it.</p>
 <p>👉 <strong>Now look at the web browser.</strong> The left panel draws the graph and colours in the nodes as they run. The right panel is the event stream, watched how the decisions are being made:</p>
-<p>Watch <code>queue_up</code> write <strong><code>queue_ticket</code></strong> and <strong><code>queue_event_id</code></strong> into
-session state, the same two keys <code>join_queue</code> used back in Module 4. Note what
-happened: a graph node took the ticket and left it exactly where the agent's
-tools look for one.</p>
-<p><code>#19</code> is the pause. Not an error, not a timeout: a function call named
-<code>adk_request_input</code>, waiting for an answer that may never come.</p>
-<p>Then it goes quiet and the run ends.</p>
-<p><strong>That silence is the result, and it is easy to mistake for a failure.</strong> Nothing
-crashed. The graph reached <code>check_front</code>, found you 14,203rd, and stopped. Look
+<p><img src="img/08-01-flow5.png" alt="The graph, parked at check_front"></p>
+<p>Watch <code>queue_up</code> write <strong><code>queue_ticket</code></strong> and <strong><code>queue_event_id</code></strong> into session state.</p>
+<p><img src="img/08-01-flow1.png" alt="The graph, parked at check_front"></p>
+<p>You should see a function call named <code>adk_request_input</code>, waiting for an answer. Then it goes quiet and the run ends. The graph reached <code>check_front</code>, found you 14,203rd, and stopped. Look
 for a process holding your place and find none.</p>
 <p>👉 Check the <strong>venue panel</strong>: one queue ticket, and nothing running.</p>
-<p><img src="img/08-01-flow1.png" alt="The graph, parked at check_front"></p>
+<p><img src="img/08-01-flow6.png" alt="The graph, parked at check_front"></p>
 <h4>3. Wake it up — and mind which box you type in</h4>
 <p>Scroll the event stream to the last event, <strong><code>adk_request_input</code></strong>. Do not read
 it as a log line. Look for the input box of its own:</p>
-<pre><code>⚡ adk_request_input
-
-   Still in the queue at #14,203. Wake me again and I will check.
-
-   ┌──────────────────────────────┐
-   │ Enter your response...       │  ➤
-   └──────────────────────────────┘
-</code></pre>
+<p><img src="img/08-01-flow7.png" alt="The graph, parked at check_front"></p>
 <p><strong>There are now two places you can type, and they do different things.</strong></p>
 <table>
 <thead>
@@ -2033,123 +1906,17 @@ did.</p>
 <p><img src="img/08-01-flow2.png" alt="Woken once, and still one ticket"></p>
 <h4>4. Get to the front, then finish</h4>
 <p>👉🔴 Press <strong>SKIP THE WAIT</strong> on the venue panel.</p>
-<p>👉✨ Answer the newest <code>adk_request_input</code> event one last time — again in <strong>its</strong>
-box, not the chat box.</p>
-<p>This time watch <code>check_front</code> find you at the front and fall through. Watch the
-left panel light up <code>brief</code> and <code>concert</code>, the last two nodes that had never run.</p>
+<p><img src="img/08-01-flow3.png" alt="The finished graph, every node green"></p>
+<p>👉✨ Answer the newest <code>adk_request_input</code> event one last time — again in <strong>its</strong> box, not the chat box.
+<img src="img/08-01-flow4.png" alt="The finished graph, every node green"></p>
+<p>This time watch <code>check_front</code> find you at the front and fall through. Watch the left panel light up <code>brief</code> and <code>concert</code>, the last two nodes.</p>
+<p><img src="img/08-01-flow8.png" alt="The finished graph, every node green"></p>
 <p>👉 <strong>And look at the browser.</strong> This is the run finishing, and there are four
 things in it worth reading.</p>
-<p><img src="img/08-01-flow3.png" alt="The finished graph, every node green"></p>
-<p><strong>The graph is fully green, and the edges are counted.</strong> <code>brief</code> and <code>concert</code>
-have lit up — the two nodes that had never run. And the edges into <code>pick_show</code>,
+<p><img src="img/08-01-flow9.png" alt="The finished graph, every node green"></p>
+<p><strong>The graph is fully green, and the edges are counted.</strong> <code>brief</code> and <code>concert</code> have lit up — the two nodes that had never run. And the edges into <code>pick_show</code>,
 <code>queue_up</code> and <code>check_front</code> now carry a badge:</p>
-<pre><code>        START
-          │
-    open_the_night
-          │  3x
-      pick_show
-          │  3x
-       queue_up
-          │  3x
-     check_front
-          │
-        brief          ← ran once, just now
-          │
-       concert         ← ran once, just now
-</code></pre>
-<p><strong><code>3x</code> is the number of times the graph walked that edge, once per wake-up.</strong> The
-three at the top are the price of resuming: the scheduler re-enters the graph from
-the beginning each time. It does <em>not</em> mean the work happened three times, and the
-venue panel is the proof: one queue ticket, not three.
-<code>@node(rerun_on_resume=False)</code> is why.</p>
-<p><strong>The header still says <code>Invocation: #1 (go)</code>.</strong> Forty-eight events,
-three messages, one invocation. That single number is the whole claim of this
-step: you did not have three conversations, you had one that stopped twice.</p>
-<p><img src="img/08-01-flow4.png" alt="One invocation, three wake-ups, edges counted"></p>
-<p><strong><code>#36</code> is the hand-off</strong>, and it is the sentence you never typed:</p>
-<pre><code>&quot;You are at the front of the queue for ms-ams-01 in Amsterdam. The plan is
-2 seats in section A, chosen because: This show is a weekend performance in
-Amsterdam, matching the user's preference, and Section A is within budget,
-avoiding the previously disliked Section B at Ziggo Dome...
-
-Buy them now. The seat map you are working from is forty minutes old, so
-read it again first — if that section has gone, take the best remaining one
-under $250 a seat...&quot;
-</code></pre>
-<p>That is <code>brief</code>, a nine-line function, writing the prompt a person would have
-written. Everything after it is <code>buyer_agent</code> doing what it has always done.</p>
-<p><strong>Then it just works:</strong></p>
-<table>
-<thead>
-<tr>
-<th>Event</th>
-<th></th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>#40</code></td>
-<td><code>recall</code> — it checks who this is for, unprompted</td>
-</tr>
-<tr>
-<td><code>#41</code></td>
-<td><code>get_seatmap(&quot;ms-ams-01&quot;)</code> — reading the seat map again, because the one in the plan is forty minutes old</td>
-</tr>
-<tr>
-<td><code>#42</code></td>
-<td>the seat map saved as an artifact</td>
-</tr>
-<tr>
-<td><code>#43-44</code></td>
-<td><code>purchase</code>, and <code>State: last_order</code> written</td>
-</tr>
-<tr>
-<td><code>#45</code></td>
-<td><em>&quot;Good morning! I've secured 2 tickets in Section A for the Amsterdam show, costing $210 each for a total of $420.&quot;</em></td>
-</tr>
-<tr>
-<td><code>#46</code></td>
-<td><code>concert completed!</code></td>
-</tr>
-<tr>
-<td><code>#48</code></td>
-<td><code>concert_nightly completed!</code> — the graph is done</td>
-</tr>
-</tbody>
-</table>
-<p>Spot <code>get_seatmap</code> before <code>purchase</code> with nobody asking for it, and recognise
-<code>fence.py</code> from step 7, still doing its job inside a graph that knows nothing
-about it.</p>
-<p>👉 Check the <strong>venue panel</strong> one more time:</p>
-<table>
-<thead>
-<tr>
-<th></th>
-<th></th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><strong>Tickets bought</strong></td>
-<td>1</td>
-</tr>
-<tr>
-<td>queue tickets</td>
-<td><strong>1</strong></td>
-</tr>
-<tr>
-<td>messages you sent</td>
-<td>3</td>
-</tr>
-<tr>
-<td>invocations</td>
-<td><strong>1</strong></td>
-</tr>
-</tbody>
-</table>
-<p><strong>One order and one ticket, across three separate runs.</strong> Between them, nothing
-of yours existed.</p>
-<p>Now you have watched it, go back and read what you were looking at.</p>
+<p><strong><code>2x</code> is the number of times the graph walked that edge, once per wake-up.</strong> The 2 at the top are the price of resuming: the scheduler re-enters the graph from the beginning each time. It does <em>not</em> mean the work happened three times, and the venue panel is the proof: one queue ticket, not 2. <code>@node(rerun_on_resume=False)</code> is why.</p>
 <h3>The graph</h3>
 <pre><code>START ─► open_the_night ─► pick_show ─► queue_up ─► check_front ─► brief ─► buyer_agent
          (fn)               (agent)      (fn)        (fn)           (fn)     (agent)
@@ -2167,8 +1934,7 @@ nightly = Workflow(
             check_front, brief, buyer_agent)],
 )
 </code></pre>
-<p><strong>Note that two nodes are agents and two are functions, and treat which is which
-as the whole design question.</strong></p>
+<p><strong>Note that two nodes are agents and two are functions, and treat which is which as the whole design question.</strong></p>
 <table>
 <thead>
 <tr>
@@ -2207,8 +1973,7 @@ idempotency key in <code>purchase</code>. There is only one of it.</p>
 while not ready:          # never do this
     time.sleep(1)
 </code></pre>
-<p>It keeps a process alive for forty minutes to achieve nothing, dies with the
-terminal, and cannot be resumed. Here is what <code>check_front</code> does instead:</p>
+<p>It keeps a process alive for forty minutes to achieve nothing, dies with the terminal, and cannot be resumed. Here is what <code>check_front</code> does instead:</p>
 <pre><code class="language-python"># agent/concert/nightly.py — check_front
 if not status[&quot;ready&quot;]:
     return RequestInput(message=f&quot;Still at #{position}. Wake me and I'll check.&quot;)
@@ -2368,7 +2133,7 @@ nightly = Workflow(
 <p><strong>Two nodes stop and wait, and they are the same mechanism.</strong> <code>check_front</code> waits for a venue and is answered by a clock. <code>agree_budget</code> waits for a person and can only be answered by a person. That difference is the whole of step 10.</p>
 <h3>Run it — step by step</h3>
 <h4>1. Start it</h4>
-<p>👉 Reload <strong>localhost:8000</strong> and pick <code>concert</code> agent.</p>
+<p>👉 Reload the <strong>ADK web UI</strong> and pick the <code>concert</code> agent.</p>
 <p>👉✨ Ask for what you actually want:</p>
 <pre><code>Get us two tickets to the Amsterdam show.
 </code></pre>
@@ -2565,7 +2330,7 @@ the same world: 8 shows, all seats available, clock at 1×.</p>
 <h3>The page you already built</h3>
 <p>Go back to the chat page from step 3. It has been sitting there since, waiting
 for this step.</p>
-<p><code>adk web</code> is a developer tool. The State tab, the event stream and the graph are
+<p>The <strong>ADK web UI</strong> is a developer tool. The State tab, the event stream and the graph are
 what you want while you are learning, and none of it is something you hand to
 another person. It does not exist on Cloud Run either.</p>
 <p>The page does exactly what <code>adk web</code> did for you: talks to the agent, shows what
@@ -2743,7 +2508,7 @@ Read the plan before approving. The point of naming all five resources is that y
 <p><b>⚠️ Trigger endpoints need Cloud Run or GKE.</b> Agent Runtime does not support scheduled or event-driven triggers, so this is not a choice between deployment targets.</p>
 </aside>
 <h3>Talk to it</h3>
-<p>👉 Open the agent's URL in a browser. Not <code>/panel</code>, not <code>:8000</code> — the service
+<p>👉 Open the agent's URL in a browser. Not the venue panel, not the <strong>ADK web UI</strong> — the service
 you just deployed. This is MonsterTix, on the internet, with nothing of your
 laptop involved.</p>
 <p>It knows nothing about you. The memory file went into the bucket, but this is a
