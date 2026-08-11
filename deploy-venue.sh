@@ -9,7 +9,7 @@ cd "$(dirname "$0")"
 [ -f .env ] && set -a && . ./.env && set +a
 
 PROJECT="${GOOGLE_CLOUD_PROJECT:?set GOOGLE_CLOUD_PROJECT in .env}"
-REGION="${VENUE_REGION:-us-central1}"
+REGION="${VENUE_REGION:-${GOOGLE_CLOUD_REGION:-us-central1}}"
 
 # Service names must be lowercase alphanumeric + dashes, so scrub the account.
 WHO=$(gcloud config get-value account 2>/dev/null | cut -d@ -f1 \

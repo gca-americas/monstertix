@@ -28,7 +28,7 @@ cd "$(dirname "$0")"
 [ -f .env ] && set -a && . ./.env && set +a
 
 PROJECT="${GOOGLE_CLOUD_PROJECT:?set GOOGLE_CLOUD_PROJECT — run ./setup.sh}"
-REGION="${AGENT_REGION:-us-central1}"
+REGION="${AGENT_REGION:-${GOOGLE_CLOUD_REGION:-us-central1}}"
 SQL_INSTANCE="${SQL_INSTANCE:-workshop-sessions}"
 DB_NAME="${SQL_DB:-adk}"
 DB_USER="${SQL_USER:-adk}"

@@ -10,13 +10,28 @@ import os
 
 import httpx
 
-VENUE_URL = os.environ.get("VENUE_URL", "http://127.0.0.1:8080")
+# No default. A silent fallback to localhost is worse than no venue at all: the
+# agent quietly talks to a machine that is not the one you deployed, and either
+# gets connection refused or — much worse — reaches a stale local venue with
+# different prices and a different queue. Say what is missing instead.
+VENUE_URL = os.environ.get("VENUE_URL", "").rstrip("/")
+
+
+def _base() -> str:
+    if not VENUE_URL:
+        raise RuntimeError(
+            "VENUE_URL is not set, so there is no venue to talk to.\n"
+            "  In this terminal:   . ./set_env.sh\n"
+            "  Deployed venue:     ./deploy-venue.sh   (writes it into .env)\n"
+            "  Local venue:        . ./set_env.sh local"
+        )
+    return VENUE_URL
 AGENT_URL = os.environ.get("AGENT_URL", "http://127.0.0.1:8000")
 
 
 
 def client() -> httpx.Client:
-    return httpx.Client(base_url=VENUE_URL, timeout=30)
+    return httpx.Client(base_url=_base(), timeout=30)
 
 
 def get(path: str, **params) -> dict:

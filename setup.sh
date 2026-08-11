@@ -67,6 +67,11 @@ PROJECT=""
 
 if [ -n "${PROJECT_ID:-}" ]; then
   PROJECT="$PROJECT_ID"
+elif [ -n "${GOOGLE_CLOUD_PROJECT:-}" ]; then
+  # Already set in this shell — somebody has configured their environment, so
+  # use it quietly rather than asking a question they have already answered.
+  PROJECT="$GOOGLE_CLOUD_PROJECT"
+  REMEMBERED=env
 elif [ -f "$PROJECT_FILE" ]; then
   PROJECT=$(tr -d '[:space:]' < "$PROJECT_FILE")
   [ -n "$PROJECT" ] && REMEMBERED=yes
@@ -117,11 +122,45 @@ fi
 
 printf '%s\n' "$PROJECT" > "$PROJECT_FILE"
 gcloud config set project "$PROJECT" >/dev/null 2>&1
-if [ "${REMEMBERED:-}" = "yes" ]; then
+if [ "${REMEMBERED:-}" = "env" ]; then
+  echo "→ project    $PROJECT  (from GOOGLE_CLOUD_PROJECT in your shell)"
+elif [ "${REMEMBERED:-}" = "yes" ]; then
   echo "→ project    $PROJECT  (remembered — rm $PROJECT_FILE to change)"
 else
   echo "→ project    $PROJECT  (saved to $PROJECT_FILE)"
 fi
+
+# Location and region: use whatever is already set, and only fall back if it is
+# not. Somebody with GOOGLE_CLOUD_LOCATION exported has told us where they work,
+# and asking again or overwriting it would be rude.
+#
+#   GOOGLE_CLOUD_LOCATION   where the MODEL is served. "global" is right for
+#                           Gemini on Vertex and is not a Cloud Run region.
+#   GOOGLE_CLOUD_REGION     where SERVICES live: Cloud Run, Cloud SQL, buckets,
+#                           Pub/Sub, Scheduler. Everything deployable uses this.
+LOCATION="${GOOGLE_CLOUD_LOCATION:-global}"
+
+# Deliberately NOT read from `gcloud config get-value run/region`. That value
+# often survives from another project entirely, and silently deploying a
+# student's venue to a region they picked months ago for something else is the
+# kind of thing nobody notices until the URLs do not match the codelab.
+if [ -n "${GOOGLE_CLOUD_REGION:-}" ]; then
+  REGION="$GOOGLE_CLOUD_REGION"; REGION_SRC="from GOOGLE_CLOUD_REGION in your shell"
+else
+  REGION="us-central1";          REGION_SRC="default"
+fi
+export GOOGLE_CLOUD_LOCATION="$LOCATION" GOOGLE_CLOUD_REGION="$REGION"
+
+echo "→ location   $LOCATION  (where the model is served)"
+echo "→ region     $REGION  ($REGION_SRC — everything deployable goes here)"
+
+# If gcloud disagrees, say so rather than quietly picking one.
+GCLOUD_REGION=$(gcloud config get-value run/region 2>/dev/null)
+case "$GCLOUD_REGION" in
+  ""|"(unset)"|"$REGION") ;;
+  *) echo "             note: your gcloud run/region is $GCLOUD_REGION, which is NOT"
+     echo "             being used. To deploy there:  GOOGLE_CLOUD_REGION=$GCLOUD_REGION ./setup.sh" ;;
+esac
 
 # The project id is the one line in .env that differs per student, so write it
 # rather than making them edit it by hand.
@@ -130,6 +169,15 @@ if grep -q '^GOOGLE_CLOUD_PROJECT=' .env; then
 else
   printf 'GOOGLE_CLOUD_PROJECT=%s\n' "$PROJECT" >> .env
 fi
+
+for pair in "GOOGLE_CLOUD_LOCATION=$LOCATION" "GOOGLE_CLOUD_REGION=$REGION"; do
+  key="${pair%%=*}"
+  if grep -q "^$key=" .env; then
+    sed -i.bak "s|^$key=.*|$pair|" .env && rm -f .env.bak
+  else
+    printf '%s\n' "$pair" >> .env
+  fi
+done
 
 . ./.env 2>/dev/null
 GOOGLE_CLOUD_PROJECT="$PROJECT"
@@ -204,7 +252,7 @@ fi
 
 # Prove the model actually answers, so nobody discovers a 404 mid-workshop.
 MODEL="${ADK_MODEL:-gemini-2.5-flash}"
-CHECK=$(.venv/bin/python - "$PROJECT" "${GOOGLE_CLOUD_LOCATION:-global}" "$MODEL" <<'PY' 2>&1
+CHECK=$(.venv/bin/python - "$PROJECT" "$LOCATION" "$MODEL" <<'PY' 2>&1
 import sys
 try:
     from google import genai
@@ -247,7 +295,7 @@ if [ "${CHECK:0:2}" = "OK" ]; then
   else
     nohup gcloud sql instances create "$SQL_INSTANCE" \
       --project "$PROJECT" --database-version=POSTGRES_15 \
-      --tier=db-f1-micro --region="${VENUE_REGION:-us-central1}" \
+      --tier=db-f1-micro --region="$REGION" \
       --storage-size=10 --storage-type=HDD --no-backup --quiet \
       >"$HOME/.cloudsql-create.log" 2>&1 &
     echo "→ cloudsql   creating $SQL_INSTANCE in the background (~10 min)"
@@ -261,7 +309,18 @@ if [ "${CHECK:0:2}" = "OK" ]; then
   # presses SELL THE GOOD SEATS, everyone else's agent starts failing for no
   # visible reason. `gcloud run deploy` is idempotent, so re-running setup
   # redeploys over the top rather than erroring.
-  if ./deploy-venue.sh >/tmp/venue-deploy.log 2>&1; then
+  # Enabling run/cloudbuild a few seconds ago does not mean they are usable
+  # yet — enablement propagates, and the first deploy after it can fail with
+  # "API has not been used in project ... before or it is disabled". So try
+  # twice, with a pause, before believing it.
+  if ! ./deploy-venue.sh >/tmp/venue-deploy.log 2>&1; then
+    if grep -qiE "has not been used in project|is disabled|SERVICE_DISABLED|PERMISSION_DENIED" /tmp/venue-deploy.log; then
+      echo "→ venue      APIs still switching on, waiting 30s and retrying"
+      sleep 30
+      ./deploy-venue.sh >/tmp/venue-deploy.log 2>&1 || true
+    fi
+  fi
+  if grep -q "venue deployed" /tmp/venue-deploy.log; then
     # gcloud bolds the URL, so a greedy [^ ]* match swallows the trailing ANSI
     # reset and prints as a stray [m. Matching only URL-safe characters stops at
     # the escape byte instead, with no sed and no locale trouble.
@@ -269,17 +328,34 @@ if [ "${CHECK:0:2}" = "OK" ]; then
                 /tmp/venue-deploy.log)
     echo "→ venue      deployed  $VENUE_URL"
   else
-    echo "→ venue      FAILED"
-    tail -5 /tmp/venue-deploy.log | sed 's/^/               /'
-    echo "               retry with:  ./deploy-venue.sh"
+    echo ""
+    echo "  ✗✗✗ THE VENUE DID NOT DEPLOY ✗✗✗"
+    echo ""
+    echo "  Nothing else in this workshop works without it: the agent has no"
+    echo "  world to buy from, and no panel to check its story against."
+    echo ""
+    tail -12 /tmp/venue-deploy.log | sed 's/^/      /'
+    echo ""
+    echo "  Full log:  /tmp/venue-deploy.log"
+    echo "  Retry:     ./deploy-venue.sh"
+    echo ""
   fi
 
   echo ""
   echo "✓ setup complete."
   echo ""
-  echo "  check it:  ./verify.sh"
-  echo "  then:      source .venv/bin/activate"
-  echo "             adk web agent      # the exact command is in the codelab"
+  if [ -n "${VENUE_URL:-}" ]; then
+    echo "  your venue:  $VENUE_URL/panel"
+    echo "               keep this tab open all day. It is where you press the buttons,"
+    echo "               and where you check whether the agent actually did what it said."
+  else
+    echo "  ⚠ no venue URL. The agent has nothing to buy from until you run:"
+    echo "               ./deploy-venue.sh"
+  fi
+  echo ""
+  echo "  check it:    ./verify.sh"
+  echo "  then:        source .venv/bin/activate"
+  echo "               adk web agent      # the exact command is in the codelab"
 else
   echo "→ model      $MODEL FAILED"
   echo ""
