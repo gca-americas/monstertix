@@ -190,7 +190,7 @@ the same world: 8 shows, all seats available, clock at 1×.
 cd ~/monstertix
 . ./set_env.sh
 ./use-solution.sh 2 --force
-adk web agent --port 8000
+adk web agent --port 8000 --allow_origins "*"
 ```
 
 `use-solution.sh` copies a step's finished code into `agent/`, which is where you work. Every step starts with it and it prints which files it changed so you know what to read.
@@ -372,7 +372,7 @@ root_agent = Agent(
 
 ```bash
 cd ~/monstertix
-adk web agent --port 8000
+adk web agent --port 8000 --allow_origins "*"
 ```
 
 👉✨ Tell it the plan, exactly as you would tell a person:
@@ -704,7 +704,7 @@ What changed since the last step:
 ```bash
 cd ~/monstertix
 . ./set_env.sh
-adk web agent --port 8000 \
+adk web agent --port 8000 --allow_origins "*" \
   --session_service_uri="sqlite+aiosqlite:///$WORKSHOP/sessions.db" \
   --artifact_service_uri="file://$WORKSHOP/artifacts"
 ```
@@ -923,11 +923,6 @@ Show me the seat map for the Amsterdam Saturday show.
 
 ![New session, second turn](img/04-01-newsession2.png)
 
-```
-Show me the seat map for the Amsterdam Saturday show.
-```
-
-![New session, second turn](img/04-01-newsession2.png)
 
 ```
 Actually, hold that thought — what else is on in Amsterdam?
@@ -1239,7 +1234,7 @@ Prefer the short prompt: cheaper, faster, and much harder to derail. Rely on the
 
 ```bash
 cd ~/monstertix
-adk web agent --port 8000 \
+adk web agent --port 8000 --allow_origins "*" \
   --session_service_uri="sqlite+aiosqlite:///$WORKSHOP/sessions.db" \
   --artifact_service_uri="file://$WORKSHOP/artifacts"
 ```
@@ -1484,7 +1479,7 @@ What changed since the last step:
 ```bash
 cd ~/monstertix
 . ./set_env.sh
-adk web agent --port 8000 \
+adk web agent --port 8000 --allow_origins "*" \
   --session_service_uri="sqlite+aiosqlite:///$WORKSHOP/sessions.db" \
   --artifact_service_uri="file://$WORKSHOP/artifacts"
 ```
@@ -1536,7 +1531,7 @@ Ctrl-C
 ```bash
 cd ~/monstertix
 . ./set_env.sh
-adk web agent --port 8000 \
+adk web agent --port 8000 --allow_origins "*" \
   --session_service_uri="sqlite+aiosqlite:///$WORKSHOP/sessions.db" \
   --artifact_service_uri="file://$WORKSHOP/artifacts"
 ```
@@ -1840,7 +1835,7 @@ cd ~/monstertix
 ```bash
 cd ~/monstertix
 . ./set_env.sh
-adk web agent --port 8000 \
+adk web agent --port 8000 --allow_origins "*" \
   --session_service_uri="sqlite+aiosqlite:///$WORKSHOP/sessions.db" \
   --artifact_service_uri="file://$WORKSHOP/artifacts"
 ```
@@ -1983,7 +1978,7 @@ cd ~/monstertix
 ```bash
 cd ~/monstertix
 . ./set_env.sh
-adk web agent --port 8000 \
+adk web agent --port 8000 --allow_origins "*" \
   --session_service_uri="sqlite+aiosqlite:///$WORKSHOP/sessions.db" \
   --artifact_service_uri="file://$WORKSHOP/artifacts"
 ```
@@ -2227,7 +2222,7 @@ cd ~/monstertix
 ```bash
 cd ~/monstertix
 . ./set_env.sh
-adk web agent --port 8000 \
+adk web agent --port 8000 --allow_origins "*" \
   --session_service_uri="sqlite+aiosqlite:///$WORKSHOP/sessions.db" \
   --artifact_service_uri="file://$WORKSHOP/artifacts"
 ```
