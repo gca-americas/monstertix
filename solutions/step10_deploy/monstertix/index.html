@@ -292,6 +292,7 @@ async function ask(text) {
       const last = i === (data.said.length - 1);
       bubble(line, "agent", last && data.awaiting_input);
     });
+    SEEN = Date.now() / 1000;
     if (!data.said || !data.said.length) {
       bubble("(the run finished without saying anything)", "agent");
     }
