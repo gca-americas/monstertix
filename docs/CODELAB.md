@@ -2481,53 +2481,7 @@ The page does exactly what `adk web` did for you: talks to the agent, shows what
 it said, lets you answer when it asks something. What it does not do is expose
 your development tools to whoever has the URL.
 
-### Test it locally first
 
-Do this before touching Google Cloud. `main.py` is the same app the container
-will run, so run it on your laptop and be sure before you spend three minutes on
-a build.
-
-👉💻 **Terminal 2:**
-
-```bash
-cd ~/monstertix/agent
-. ../set_env.sh
-uvicorn main:app --port 8092
-```
-
-👉 Open **http://127.0.0.1:8092** and book something. Same MonsterTix, same
-agent, same venue — served by the production entrypoint this time.
-
-👉💻 And check the endpoint a scheduler would call actually exists:
-
-```bash
-curl -s localhost:8092/openapi.json | grep -o '/trigger/wake'
-```
-
-```
-/trigger/wake
-```
-
-One app, two doors:
-
-```
-   ┌─ one service ────────────────────────────────────────────┐
-   │  /                        the page, for a person          │
-   │  /wake                    what that page posts to         │
-   │  /apps/concert/trigger/   what a scheduler reaches         │
-   │       pubsub                                              │
-   │                                                           │
-   │       one Runner · one session store · one graph          │
-   └───────────────────────────────────────────────────────────┘
-```
-
-They are one service on purpose. The page calls `/wake` on its own address, so
-there is no cross-origin problem, no second deployment, and no authentication
-between them. Two services would mean solving all three for nothing.
-
-<aside class="negative">
-<b>⚠️ <code>adk deploy cloud_run</code> cannot do this.</b> It writes its own entrypoint, which serves the agent and nothing else — no page, no <code>/wake</code> — and there is no flag to give it yours. So the deploy below uses <code>gcloud run deploy --source agent</code> with the <code>Dockerfile</code> in that folder, the same command the venue has used since the start.
-</aside>
 
 ### Three files that cannot come with you
 
@@ -2640,12 +2594,13 @@ first of five steps:
 ```
 
 <aside class="negative">
-<b>⚠️ ADK ships a trigger endpoint, and this workshop deliberately does not use it.</b> <code>trigger_sources=["pubsub"]</code> mounts <code>/apps/&lt;app&gt;/trigger/pubsub</code>, and its source says exactly what it does with a message:
-<pre>session_id = str(uuid.uuid4())               # a brand new session
-user_id    = subscription.replace("/", "--")  # and a different user</pre>
-That is right for <i>"fire an agent at something"</i>, where each message is independent work. It is wrong for <i>"go and finish the thing you started"</i>. A fresh session has no queue ticket, no agreed budget and no memory of the conversation, so the 3am run would not resume your booking — <b>it would start a second one and buy another pair of tickets.</b>
+<b>⚠️ Why use <code>/trigger/wake</code> instead of ADK's built-in <code>/apps/&lt;app&gt;/trigger/pubsub</code>?</b><br>
+ADK's default trigger creates a brand-new <code>session_id</code> and <code>user_id</code> for every incoming message:
+<pre>session_id = str(uuid.uuid4())
+user_id    = subscription.replace("/", "--")</pre>
+This works for stateless, one-off tasks. But for long-running workflows, a new session lacks existing context (queue tickets, budget, history) and would trigger a duplicate purchase instead of resuming the pending run.
 <br><br>
-So <code>main.py</code> adds <code>/trigger/wake</code>, which lists the sessions for this user, finds the one that is parked on a question, and answers <i>that</i>. The scheduler pushes there instead. Same Pub/Sub, same retries, same timezone — a different idea about which conversation it belongs to.
+<code>/trigger/wake</code> finds the user's existing parked session and resumes it.
 </aside>
 
 **Why a scheduler.** Go back to `clock.py` in step 3: sleep, then POST. It
