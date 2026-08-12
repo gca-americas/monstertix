@@ -2813,18 +2813,18 @@ a paused one with `Job.state must be ENABLED`:
 
 ```bash
 gcloud scheduler jobs resume presale-$(gcloud config get-value account | cut -d@ -f1) \
-  --location=us-central1
+  --location=$GOOGLE_CLOUD_REGION
 ```
 
 And for a demo, make it impatient:
 
 ```bash
 gcloud scheduler jobs update pubsub presale-$(gcloud config get-value account | cut -d@ -f1) \
-  --location=us-central1 --schedule="*/5 * * * *"
+  --location=$GOOGLE_CLOUD_REGION --schedule="*/5 * * * *"
 ```
 
 <aside class="negative">
-<b>⚠️ Pause it again when you are done.</b> An enabled job fires against your venue every night, or every five minutes if you set the impatient schedule above. <code>gcloud scheduler jobs pause &lt;job&gt; --location=us-central1</code>.
+<b>⚠️ Pause it again when you are done.</b> An enabled job fires against your venue every night, or every five minutes if you set the impatient schedule above. <code>gcloud scheduler jobs pause &lt;job&gt; --location=$GOOGLE_CLOUD_REGION</code>.
 </aside>
 
 ### Check the state is really durable
