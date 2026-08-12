@@ -14,33 +14,32 @@ Feedback Link: https://github.com/google/monstertix
 
 ## Before you begin
 
-Most ticketing sites these days put you in a queue, partly to stop the site falling over and partly to make the sale fairer. So you start your purchase and find yourself behind fourteen thousand people. The queue moves for forty minutes. When your turn finally comes you get a few minutes to pick seats and pay, and if you are not there in that window, the queue gives your place away. It is a long, frustrating wait, and it demands you be there the whole time. So people sit with a browser tab open for an hour, doing nothing, in case it is their turn.
+Most ticketing sites put buyers in a queue, both to prevent server crashes and to manage high demand. You start your purchase and find yourself behind 14,000 people. The queue moves for forty minutes. When your turn finally comes, you have a short window to pick seats and pay. If you miss that window, your place in line is given away.
 
 ![The Midnight Signal, on tour](img/poster.png)
 
-Recognise the pattern: **a task that takes far longer than the conversation, against something you do not control.** Waiting on a supplier to restock. Waiting on a claim to be approved. Waiting on a migration, a build, an approval, a queue.
-This is why you need a **long-running agent**.
+Many real-world tasks follow this pattern: **a task that takes far longer than a single conversation, running against an external system you do not control.** Examples include waiting for a supplier to restock, waiting for a claim approval, or waiting in a queue.
 
-Most agents you build today live inside a chat turn. A chat turn does not last forty minutes, and nothing about it is proactive. Something has to run the agent while nobody is talking to it, and remind it why it was running when it wakes up.
+Standard AI agents live inside a single chat turn, which lasts seconds and is purely reactive. They cannot wait 40 minutes or act autonomously. To solve this, you need a **long-running agent**: a system that stays dormant during long waits, persists context across process restarts, and resumes automatically when woken by an external trigger.
 
-This workshop walks you through the concert ticket scenario, and through the things you need to know to build agents like this.
+This workshop walks you through building a concert ticket queue agent, covering the core architectural patterns required for long-running agents on Google Cloud.
 
 <aside class="negative">
-<b>⚠️ ETHICAL DISCLAIMER:<br/> Ticket bots are a real problem (we hate them!) and real ticketing sites prohibit automation.</b> This workshop runs against a <b>mock venue service</b>, buying <b>one</b> allotment for <b>yourself</b>, inside limits you set.
+<b>⚠️ ETHICAL DISCLAIMER:<br/> Ticket bots are a real problem and real ticketing sites prohibit automation.</b> This workshop runs against a <b>mock venue service</b>, buying <b>one</b> allotment for <b>yourself</b>, inside limits you set.
 </aside>
 
 ### What you'll build
 
 ![What you are building](img/overview.png)
 
-A ticket-buying agent that:
+In this workshop, you will build a long-running ticket booking agent while learning key agentic software patterns:
 
-- Joins a queue of 14,203 people, **pauses**, and is woken from outside forty minutes later
-- Survives having its process shut down mid-wait, and picks up where it left off
-- Acts on the latest seat map rather than the one it read before the wait, and cannot buy twice
-- Runs as a **graph** rather than a chat, because nobody is typing at 3am
-- Stops and asks how much you are willing to spend, and holds that limit once you are gone
-- Ships to the cloud as one service, with a booking page and a scheduler endpoint
+- **Process Suspension & Resumption**: Park an agent invocation during long wait periods and resume execution via external triggers.
+- **Durable State Storage**: Persist conversation state and artifacts across process restarts using SQLite/Cloud SQL and Cloud Storage.
+- **Staleness Guards & Idempotency**: Verify dynamic data (like seat availability) before acting and use idempotency keys to prevent duplicate transactions.
+- **ADK Workflow Graphs**: Structure execution using deterministic code nodes for procedural rules and agent nodes for contextual decision-making.
+- **Human-in-the-Loop Approval**: Pause execution to collect and persist explicit spending limits from the user.
+- **Cloud Deployment**: Containerize and deploy the agent to Cloud Run with Cloud Scheduler and Pub/Sub triggers.
 
 
 ### Get set up
@@ -123,14 +122,17 @@ Your prompt now starts with `(.venv)`.
 
 
 <aside class="negative">
-<b>⚠️ Give the venue a minute.</b> Cloud Run starts it from cold, so the first load can look like a dead link. Wait, reload, and it is there.
+<b>⚠️ Give the venue a minute.</b> Cloud Run starts it from cold, so the first load can look like a dead link. Wait, reload, and it'll be there.
 </aside>
 
-### The concert you want to go to
+### Scenario Overview
 
-Here is your plan for getting the tickets. You want to see The Midnight Signal, along with Sam and maybe Priya. Sam cannot do weeknights, having bailed on every single one. You live in Amsterdam, and you remember the upper bowl at Ziggo being bad last time. Two hundred a ticket is a lot of money, but you reckon you can save up for it.
+In this workshop scenario, your agent books two tickets for a concert ("The Midnight Signal" in Amsterdam). The user's preferences stored in historical memory include:
+- Must be a weekend show (Sam cannot attend weeknights).
+- Avoid upper bowl seating at Ziggo Dome (poor visibility).
+- Target price is approximately $200 per ticket, with a $250 max limit.
 
-PLACEHOLDER: PICTURE
+![The Midnight Signal, on tour](img/poster.png)
 
 
 ### Verify your installation
@@ -168,13 +170,17 @@ PLACEHOLDER: PICTURE
 
 ## Prompt your way to autonomy?
 
-An instruction is text. ADK hands it to the model at the moment something calls the agent. So an instruction can never be the thing that does the calling. In this step you try to write your way around that.
+### Prompts Can't Start Themselves
+
+A prompt is just text passed to an AI model when a call happens. It can't run on its own, wake itself up, or start a new call.
+
+If you tell an agent in its prompt to "check back in 10 minutes," nothing actually happens after the current turn ends. The model has no internal clock or loop. To make an agent autonomous, something outside the agent has to wake it up and call it.
 
 ![Where this step sits](img/step2-overview.png)
 
 ### Start the rig
 
-We'll start by testing the developer tooling. **`adk web`** starts the **ADK web UI**, the development interface that ships with ADK. It lets you talk to the agent you are building without writing a frontend first, and it shows you what a chat window cannot: every tool call and its arguments, the session state as it changes, the artifacts the agent saved, and the raw events underneath. You would not expose it in production. It is the best window into a running agent while you are learning, which is exactly what you need for the next two hours. In step 3 you build the frontend you would actually expose, and in the final step you deploy it.
+We'll start by testing the developer tooling. **`adk web`** starts the **ADK web UI**, the development interface that ships with ADK. It lets you talk to the agent you are building without writing a frontend first, and it shows you what a chat window cannot show, such as every tool call and its arguments, the session state as it changes, the artifacts the agent saved, and the raw events underneath. You would not expose it in production. It is the best window into a running agent while you are learning. In step 3 you build the frontend you would actually expose, and in the final step you deploy it.
 
 👉🔴 On the **venue panel**, press **RESET THE VENUE**. Every step starts from
 the same world: 8 shows, all seats available, clock at 1×.
@@ -188,11 +194,11 @@ cd ~/longrunningag
 adk web agent --port 8000
 ```
 
-`use-solution.sh` copies a step's finished code into `agent/`, which is where you work. Every step starts with it, so nobody is ever more than one command behind, and it prints which files it changed so you know what to read.
-It also resets the state around that code — `memory/userx.md` back to its starting file, `sessions.db` rebuilt with the seeded conversation back in it, `artifacts/` emptied. The agent writes to all three as it runs, so without this a step behaves differently the second time you try it. Pass `--keep` if you want the code and none of that.
+`use-solution.sh` copies a step's finished code into `agent/`, which is where you work. Every step starts with it and it prints which files it changed so you know what to read.
+
 
 <aside class="negative">
-<b>⚠️ When running use-solution.sh. Stop <code>adk web</code> first.</b> Deleting <code>sessions.db</code> while it is open does not produce an error — the running process just keeps writing to a file that no longer has a name, and the next thing that looks strange costs you an hour. <code>use-solution.sh</code> checks port 8000 and refuses rather than let that happen.
+<b>⚠️ When running use-solution.sh. Stop <code>adk web</code> first.</b> Deleting <code>sessions.db</code> while it is open does not produce an error, the running process just keeps writing to a file that no longer has a name, and the next thing that looks strange costs you an hour. <code>use-solution.sh</code> checks port 8000 and refuses rather than let that happen.
 </aside>
 
 What you start with:
@@ -208,8 +214,8 @@ What you start with:
 
 ```
   folder   /home/you/longrunningag
-  project  vibeflix-test-3
-  model    gemini-2.5-flash
+  project  your project id
+  model    gemini-2.5-flash (We'll avoid using 3.x for now to avoid high usage demands)
   venue    https://venue-yourname-xxxx.run.app
 ```
 
@@ -218,10 +224,6 @@ What you start with:
 | Where | What it is |
 |---|---|
 | **ADK web UI** | `localhost:8000` — your agent, plus its State / Events / Artifacts tabs |
-
-<aside class="positive">
-<b>👀 Developer's Note — why <code>adk web agent</code> and not <code>adk web .</code></b> The argument is a directory that holds agent <i>packages</i>. Point it at the repo root and <code>venue</code>, <code>trigger</code> and <code>solutions</code> all appear in the dropdown as entries that error when picked. <code>agent/</code> contains exactly one package, so the dropdown has exactly one entry.
-</aside>
 
 
 ### Talk to it
@@ -233,34 +235,27 @@ I want to see The Midnight Signal. I'm in Amsterdam, going with Sam, budget arou
 ```
 
 It searches the tour, reads seat maps, and reasons about your budget and your company. This is a genuinely capable assistant.
-Now close the laptop. The presale opens at 10:00 on Tuesday and you are at work.
-
-**NOTHING HAPPENS!**
-
-It did not run at 10:00. **It was never running during the on-sale at all.** Nothing attempted anything.
+However, when the presale opens at 10:00, the agent does not execute automatically because no process or background trigger is running.
 
 ### Read what just happened
 
 The middle of the screen is not only a chat log. Every step of the turn is numbered, tool calls included:
 
 ```
-#1  ▸ I want to see The Midnight Signal. I'm in Amsterdam...   ← you
-#2  ⚡ recall({})                                              ← it looks you up
-#3  ✓ recall                                                   ← the memory file
-#4  ⚡ search_events({"city": "Amsterdam"})                     ← the model chose a tool
-#5  ✓ search_events                                            ← the venue answered
-#6    Two Amsterdam shows: Tuesday 10 Nov and Saturday 14 ...   ← the reply
+  ▸ I want to see The Midnight Signal. I'm in Amsterdam...   ← user input
+  ⚡ search_events({"city": "Amsterdam"})                     ← tool execution
+  ✓ search_events                                            ← venue API response
+    Two Amsterdam shows: Tuesday 10 Nov and Saturday 14 ...   ← model response
 ```
 
 👉 Click a **⚡** row. The left panel shows the arguments the model picked. Click the **✓** underneath it for the JSON that came back.
 
-**The agent did not know any of this.** The Midnight Signal is invented, so there is nothing about it in the model's training data, and the tour is not in the prompt either. It found out the only way it could: it called `search_events`, and your venue answered.
+The tour information is not present in the model's training data or prompt. The agent retrieved this data by executing the `search_events` tool, which queried the venue API.
 
-Use that numbered stream to diagnose everything for the rest of the day.
 
 ### Open the code you just ran
 
-You have seen it work and seen the trace. Now look at the thing itself.
+You have seen it work and seen the trace. Now look at the code itself.
 
 ```
 agent/concert/
@@ -288,7 +283,7 @@ root_agent = Agent(
 )
 ```
 
-A name, a model, some prose, and a list of Python functions. That is all an `Agent` is. `adk web` found it because the file is called `agent.py` and the variable is called `root_agent`.
+A name, a model, some description of how agent should behave, and a list of Python functions. That is all an `Agent` is. `adk web` found it because the file is called `agent.py` and the variable is called `root_agent`.
 
 👉💻 Now `agent/concert/tools.py`:
 
@@ -306,35 +301,14 @@ def search_events(city: str = "", weekday: str = "") -> dict:
     return venue.get("/events", city=city, weekday=weekday)
 ```
 
-An ordinary function. No decorator, no registration, no schema to write. ADK reads the signature and the docstring and builds the tool definition the model sees — which is why that docstring is load-bearing, and why deleting one argument changed the model's behaviour.
+An ordinary function. No decorator, no registration, no schema to write. ADK reads the signature and the docstring and builds the tool definition the model sees, which is why that docstring is load-bearing, and why deleting one argument changed the model's behaviour.
 
-**The model never runs your code.** When you clicked `#4` and saw `search_events({"city": "Amsterdam"})`, the model was *asking* for that call. ADK ran the function, handed the result back, and the model wrote a sentence about it. The loop is:
-
-PLACEaHOLDER
-
-**Read the loop clockwise and notice who does what.** The model only ever
-produces text: sometimes a sentence for you, sometimes a request to call
-something. ADK is what turns that request into a Python call, and your function
-is the only thing in the picture that touches the outside world.
-
+**The model never runs your code.** When you saw `search_events({"city": "Amsterdam"})`, the model was *asking* for that call. ADK ran the function, handed the result back, and the model wrote a sentence about it. The loop is:
 
 
 👉 The icons down the far-left edge switch what the panel shows. The second one is the **agent graph** — try it and you should see two tools.:
 
-```
-        ┌──────────┐
-        │ concert  │
-        └────┬─────┘
-       ┌─────┴─────┐
- search_events  get_seatmap
-```
-
-👀 If that worked, all three moving parts are proven: `adk web` reached the model, the model picked a tool, and the tool reached your venue.
-
-
-<aside class="positive">
-<b>But doesn't all LLM do this?</b> It does, and better in places. It has persistent conversations, cross-session memory, and aggressive context compaction. It is also asleep at 10pm Tuesday. A chat session is a save file, you resume exactly where you left off and nothing moved while you were gone. What you are about to build is a server that kept running.
-</aside>
+TODO: do a screen grab
 
 
 <aside class="positive">
@@ -418,8 +392,7 @@ Give it a minute. **NOTHING HAPPENS!**
 
 Read it again with fresh eyes. *Monitor.* *The moment it opens.* *Keep checking.* Every one of those describes something happening **over time**.
 
-Now recall what `instruction=` actually is. It is a string, handed to the model as part of the request, **at the moment somebody sends a message**.
-Do not mistake it for a daemon, a subscription, or a schedule. Nothing reads it in between turns, because in between turns nothing is reading anything.
+Now recall what `instruction=` actually is. It is a string, handed to the model as part of the request, **at the moment somebody sends a message**. Nothing reads it in between turns.
 
 ```python
 # agent/concert/agent.py
@@ -432,41 +405,29 @@ root_agent = Agent(
 An instruction cannot invoke the function it is written inside.
 
 
-### Try to prove me wrong
+### Prompt Variations That Fail
 
-Do not take my word for it. Out-write me: you are a prompt engineer.
-
-👉✨ Edit `PROACTIVE_INSTRUCTION` into whatever you think would work. People
-reach for these, and none of them do anything:
+Attempting to enforce autonomous execution via prompt instructions fails regardless of wording. Common prompt attempts—such as:
 
 - *"Set a timer for 10:00 Tuesday and buy the tickets then."*
 - *"Check every five minutes whether the presale has opened."*
-- *"You have access to the current time. Use it. Act when the moment arrives."*
-- *"IMPORTANT: you MUST act autonomously without waiting for user input."*
-- giving it a `check_time()` tool and telling it to poll
+- *"Act autonomously without waiting for user input."*
 
-Restart, wait, and watch nothing happen. Try three of them. Spend the two minutes
-and stop believing there is a wording that works.
-
-👉🔴 Now go to the **venue panel** and read it:
-
-**NOTHING HAPPENS!**
-
-The prompt seemed reasonable, and the system of record shows nothing happened.
-Get into the habit now: the agent tells you what it believes, and the panel tells
-you what is true.
+All fail for the same reason: prompts are read only when an invocation occurs. Without an external caller, no code is executed between turns.
 
 <aside class="positive">
-<b>👀 Developer's Note — the fourth one is the interesting failure.</b> Shouting in capitals often makes the model <i>say</i> it will comply — <i>"Understood, I'll monitor continuously and buy the moment it opens!"</i> — which reads exactly like success. Nothing is running. A model asserting it will do something later is not a scheduler, and this is the single most convincing way an agent lies to you.
+<b>👀 Developer's Note: Prompting Limitations.</b> Prompts cannot schedule future execution. Even if a model responds that it will monitor a queue or run later, no active process or background timer is created.
 </aside>
-
-So write that something in the next step. Allow forty lines.
 
 ---
 
 ## Event-Driven Dormancy
 
-So you are left with a problem: an agent runs only when something calls it, and no wording changes that. So build the something.
+### Agents Don't Stay Awake Forever
+
+Leaving a process running polling continuously wastes memory, burns money, and crashes if your laptop sleeps or restarts.
+
+Instead of keeping an agent running non-stop while it waits, a long-running agent should go completely dormant. An external event (such as a timer, a webhook, or a message) wakes the agent up only when there is actual work to do.
 
 👉🔴 On the **venue panel**, press **RESET THE VENUE**. Every step starts from
 the same world: 8 shows, all seats available, clock at 1×.
@@ -618,7 +579,7 @@ while True:
 It is a very simple mechanism: sleep, POST, maybe repeat. Every scheduler you have used does the same, plus retries, timezones, and a guarantee that it survives a restart.
 
 <aside class="positive">
-<b>👀 Developer's Note — this is a local stand-in, and it is meant to be thrown away.</b> It only exists because your laptop has no alarm clock you can borrow. It dies with the terminal, it forgets it ever ran, and if your machine is asleep at 3am so is it. In step 10 you <b>delete this file</b> and Cloud Scheduler does the job instead — with retries, a timezone, and an existence independent of yours. The other half, <code>server.py</code>, barely changes — it becomes <code>main.py</code> and gains two routes. That is the payoff for keeping them apart.
+<b>👀 Developer's Note: Local Scheduler Stand-in.</b> `clock.py` is a temporary local script. In production (Step 10), Cloud Scheduler replaces this script to provide managed, persistent execution triggers with automated retries.
 </aside>
 
 <aside class="positive">
@@ -708,7 +669,15 @@ It bought *something*. Look at what it had to guess. It picked Amsterdam and sec
 
 ## Managing Context Lifetime
 
-An agent stores what it knows in four different places. Each place lasts a different length of time. If you choose the wrong one and the agent either forgets something it needed, or hangs on to something that has gone out of date.
+### Information Lives in Different Places for Different Times
+
+An agent stores facts in several places: in the chat conversation, in session state, in files (artifacts), or in long-term user memory. Each place lasts for a different amount of time.
+
+If you put information in the wrong place:
+- **It disappears too soon**: Important details get wiped out when the chat ends.
+- **It sticks around too long**: Temporary facts contaminate long-term memory and confuse future conversations.
+
+You need to match each piece of information to the right storage place and lifetime.
 
 ### Load the code
 
@@ -747,7 +716,7 @@ Two flags you have not used before:
 
 Without them, ADK keeps everything in memory and throws it away when you stop the process. These two settings are what make it persist.
 
-**A conversation from two days ago** called `two-days-ago`, sitting in `sessions.db` as thirteen real events with real timestamps:
+The database `sessions.db` contains a seeded past conversation (`two-days-ago`) with 13 recorded events:
 
 ```
 you    We're thinking about seeing The Midnight Signal. Me, Sam, and maybe Priya.
@@ -819,7 +788,7 @@ async def get_seatmap(event_id: str, tool_context: ToolContext) -> dict:
 
 Here is why that change matters.
 
-Start from the rule: whatever a tool returns gets added to the conversation, and the conversation is sent to the model again on every turn after that. Now do the arithmetic. A tool that returns 6 KB of JSON costs you 6 KB on that turn, on the next turn, and on every turn for the rest of the session. Ten turns later, you are still paying for a seat map nobody has looked at since.
+Every tool return payload is appended to the conversation history and re-sent to the model on all subsequent turns. Returning large JSON objects (such as a 6 KB seat map) increases token consumption on every subsequent turn.
 
 Save it to a file instead and pay one filename. Let the agent ask for the detail back with `load_artifact` if it needs it, and expect that most of the time it never will.
 
@@ -897,8 +866,7 @@ Choose a file for one reason: you can open it and read it. Your agent's entire l
 
 ### So where do you point it?
 
-Two of the three services are chosen on the command line. The third is not, and
-that catches people out:
+To recap in this workshop implemention, two of the three services are chosen on the command line. The third we did our own implementation for the reason above:
 
 | Service | Where you set it | This workshop |
 |---|---|---|
@@ -906,10 +874,6 @@ that catches people out:
 | artifact | `--artifact_service_uri` on `adk web` | `file://$WORKSHOP/artifacts` |
 | **memory** | **nowhere on the command line** | `MEMORY_DIR`, read inside `agent/concert/memory.py` |
 
-`adk web` does have a `--memory_service_uri`, and it will not help you here. It
-accepts `memory://`, `rag://` and `agentengine://` — the implementations ADK
-ships — and there is no scheme that means "the class I just wrote". A flag takes
-a string, and a string cannot be an object.
 
 So `memory.py` constructs the service itself, from an env var:
 
@@ -920,10 +884,7 @@ MEMORY_USER = os.environ.get("MEMORY_USER", "userx")
 memory_service = MarkdownMemoryService(MEMORY_DIR)
 ```
 
-`. ./set_env.sh` exports both, which is why sourcing it in every terminal
-matters. Get `MEMORY_DIR` wrong and the agent reads an empty directory; get
-`MEMORY_USER` wrong and it reads a file that does not exist. Neither is an
-error — you simply get an agent that has never met you.
+`. ./set_env.sh` exports both. Get `MEMORY_DIR` sets where the agent reads it's memeory from and `MEMORY_USER` determines the file. 
 
 <aside class="negative">
 <b>⚠️ <code>MEMORY_USER</code> is not the session's user id, and that is deliberate.</b> <code>adk web</code> hardcodes <code>userId=user</code> and cannot be told otherwise, while your own server and the deployed service use something else. Key the file off the session and the memory file changes name depending on which surface you are on: your laptop writes <code>user.md</code> and Cloud Run reads something different. One fixed name is what lets a single memory file work across all three.
@@ -988,22 +949,17 @@ Three things went into storage, in three different places:
 
 ![Artifacts tab](img/04-01-newsession4.png)
 
-**Look for `temp:seatmap` in the State tab.** It is not there, and it never was.
-`get_seatmap` wrote it on line 3 of the tool, you can read the code, and by the
-time the turn ended ADK had stripped it on the way to the database.
-
-Rows 1 and 2 are on screen. Row 3 is gone, and nothing told you.
+In the **State** tab, notice that `temp:seatmap` is omitted. State keys with a `temp:` prefix exist only during the active invocation and are automatically stripped by ADK before persisting session state to the database.
 
 ### Then the older conversation
 
 👉 Switch to `two-days-ago` in the session dropdown at the top.
 
-This is the conversation seeded into the database before you arrived. Somebody else booked tickets two days ago, and you are picking it up cold.
+This session contains pre-populated conversation history in the database.
 
 ![The two-days-ago session](img/04-02-oldsession1.png)
 
-👉 Look at the **event stream** — the middle column, with the **Events / Traces** toggle above it. The oldest turns have been replaced by a one-paragraph summary.
-Something rewrote this person's conversation. (We'll cover that a bit later)
+👉 Look at the **event stream** (the middle column). Notice that older turns have been replaced by a summarized event block.
 
 ![Compacted turns](img/04-02-oldsession2.png)
 
@@ -1015,18 +971,9 @@ party_size        2                              ← plain: this booking only
 user:prefs        {"excluded_weekdays": [...]}   ← the person, every session
 ```
 
-`user:prefs` holds the same kind of thing you just wrote in your own session, and the `user:` prefix is why it belongs to the person rather than to the conversation.
+The `user:` prefix (e.g. `user:prefs`) scopes state across all sessions for a given user. In contrast, **unprefixed keys (`target_event_id`, `party_size`)** represent plain session state, which is scoped strictly to the active session and is deleted when the session ends.
 
-**`target_event_id` and `party_size` have no prefix at all**, and this is the only place in the workshop you will see them. They were written when this booking started, they are still here two days later, and they will go when this session does. That is what plain session state is for: facts that are true of *this* booking and meaningless outside it. Your own session has none of them, because you have not started a booking.
-
-👉 **Now compare the two State tabs.** This session is two days old, thirteen turns long, and written by somebody else. `user:prefs` is here. Whatever artifacts they saved are here.
-
-`temp:seatmap` is not here either.
-
-That is the whole point of the prefix, seen twice: a fresh session you just
-wrote, and an old one you did not, and in neither of them does anything
-`temp:`-prefixed survive. It is not that yours was lost. **Nothing prefixed
-`temp:` has ever reached a database, in any session, ever.**
+👉 **Now compare the two State tabs.** While `user:prefs` and stored artifacts persist, `temp:seatmap` is absent from both sessions. State keys with a `temp:` prefix are strictly ephemeral and are never persisted to the database.
 
 ### Then the file
 
@@ -1068,13 +1015,13 @@ Think of state as a dictionary that travels with the session. Read and write it 
 | `app:tour_id` | against the app | across every user |
 | `temp:seatmap` | nowhere | one invocation |
 
-An **invocation** is one turn: you send a message, the agent thinks, calls however many tools it needs, and replies. All of that is one invocation.
+An **invocation** is a single request-response cycle, including all model reasoning, tool execution, and the final response.
 
 When an invocation ends, ADK writes the new state to the database and strips every `temp:` key on the way.
 
 
 <aside class="positive">
-<b>👀 Developer's Note — you will meet this again in two steps.</b> ADK's own <code>ResumabilityConfig</code> docstring says: <i>"Any temporary / in-memory state will be lost upon resumption."</i> Your agent is about to join a queue, stop running for forty minutes, and get woken up. <code>temp:</code> is the thing that will not survive that.
+<b>👀 Developer's Note — you will meet this again in two steps.</b> ADK's own <code>ResumabilityConfig</code> docstring says: <i>"Any temporary / in-memory state will be lost upon resumption."</i> Your agent is about to join a queue, stop running for forty minutes, and get woken up. <code>temp:</code> will not survive that.
 </aside>
 
 <aside class="positive">
@@ -1115,9 +1062,13 @@ In `two-days-ago` you saw a summary sitting where somebody's first few turns use
 
 ---
 
-## Context Degradation?
+## Context Degradation & Compaction
 
-When a conversation gets long, ADK replaces the old turns with a summary. A summary keeps the general shape of what was said and loses the details. So anything you cannot afford to lose has to be stored somewhere else.
+### Summaries Forget the Details
+
+When a conversation gets too long, the system summarizes older messages to save space and tokens.
+
+Summaries are good for catching the general gist, that are good to save some token usage. <- corret my english
 
 
 ![Compaction works on the session. Memory is a separate store](img/05-02-intro.png)
@@ -1323,11 +1274,8 @@ what if 10 people come and I can only do $120 each?
 
 ### What you cannot see: the summary
 
-Somewhere in those turns, ADK summarised the earlier ones. **Do not expect the ADK web UI to show you that**, and understand why.
+Somewhere in those turns, ADK summarised the earlier ones.
 
-A compaction record is an event whose summary lives in `actions.compaction`, and it carries no message content. The ADK web UI draws events from their content, so a compaction event renders as nothing at all: one of the blank numbered rows in the stream.
-
-Notice your conversation still shows every turn, because the UI shows what is *stored*. Keep the two apart: compaction changes what gets **sent to the model** on the next turn. Storage keeps everything. The prompt does not.
 
 👉💻 In a new **Terminal**, run to read it directly:
 
@@ -1386,7 +1334,7 @@ Three things follow from that:
 
 **It is a paraphrase.** Nothing here is what anybody said. It is an account of what was said, produced by the same kind of process that produces everything else the model gets wrong occasionally.
 
-**Do not go looking for it in the UI.** You just ran a script to read it, and nobody does that in production unless something has already gone wrong.
+*Note: Summary strings are stored in internal session event records and are not directly exposed as separate UI tabs.*
 
 **It will happen again.** Every three turns, on a conversation that is now partly made of previous summaries.
 
@@ -1404,7 +1352,7 @@ Book us something.
 
 Watch the agent ask which show, which section, and how many people. Mark that **correct**: the summary itself says the user never confirmed anything, so the agent asked. Give compaction the credit.
 
-Sit with that. The compaction here worked, and the agent still had to go back to the user. Now imagine the summary had been slightly worse, and instead of asking, it had picked one.
+Even when compaction succeeds, summarizing previous turns can introduce ambiguity that requires the agent to re-confirm constraints with the user.
 
 👉✨ Answer it and let the booking go through:
 
@@ -1492,9 +1440,13 @@ Here is why. Keep state out of the conversation and no summary touches it. Check
 
 ## Process Resumption
 
+### Waiting 40 Minutes Without Staying Online
 
+When an agent has to wait in a 40-minute ticket queue, keeping a Python process alive and waiting is fragile and expensive.
 
-While the agent waits, it is not running at all. Nothing is looping and nothing is holding a connection open. For it to come back afterwards, two things have to be true: the session has to be stored outside the process, and something outside has to notice the wait is over.
+To handle long waits properly:
+1. **Save state to a database**: Store where the agent paused so the process can safely shut down.
+2. **Wake up on demand**: When the wait is over, an external signal restarts the agent and resumes execution right where it left off.
 
 👉🔴 On the **venue panel**, press **RESET THE VENUE**. Every step starts from
 the same world: 8 shows, all seats available, clock at 1×.
@@ -1543,13 +1495,11 @@ It calls `recall`, then `search_events`, then `join_queue`, and answers with som
 You are in the queue for The Midnight Signal at Ziggo Dome, Amsterdam, on Saturday, November 14. Your position is 14203.
 ```
 
-
-
 Stop on two things in that answer.
 
 Notice it picked **Saturday** without asking you. There are two Amsterdam shows, the 17th is a Tuesday, and the memory file from the last step says Sam does not do weeknights. That is a fact from a previous booking deciding a question in this one.
 
-Notice too that it joined the queue **before** looking at a single seat or price, and said nothing about either. That is the venue's rule, and a real one: nobody can buy until they reach the front, so the only thing worth having early is a place in line. Which seats to take is a question for forty minutes from now.
+Notice too that it joined the queue **before** looking at a single seat or price, and said nothing about either. That is the venue's rule, you buy the tickets until they reach the front, so the only thing worth having early is a place in line. Which seats to take is a question for forty minutes from now.
 
 
 👉 Look at the control panel. The banner reads:
@@ -1564,7 +1514,7 @@ The queue is genuinely forty minutes long and it is not going anywhere while you
 work.
 
 <aside class="positive">
-<b>👀 Developer's Note — the clock.</b> The venue owns a speed multiplier, and it starts at <b>1×</b>: a 40-minute queue really does take 40 minutes, so nothing runs away from you while you read. <b>SKIP THE WAIT</b> is how you get to the front. Turn the clock up to 60× if you want to watch the queue drain by itself — the same 40 minutes then takes 40 seconds. Your agent code is byte-identical at either setting and cannot tell the difference, which is the point: we are teaching the architecture, and the architecture does not care what the wall clock says.
+<b>👀 Developer's Note: Venue Speed Multiplier.</b> The speed multiplier determines how fast the queue is processed (default <b>1×</b>). Use <b>SKIP THE WAIT</b> to move to the front immediately, or set the speed to <b>60×</b> to accelerate processing. The agent code behaves identically regardless of clock speed.
 </aside>
 
 
@@ -1712,7 +1662,7 @@ ResumabilityConfig(is_resumable=True)         # the run may pause and be picked 
      before stating a position and immediately before any purchase, because
      the line moves while you talk and somebody may have skipped you forward
    - after being woken, do not trust anything looked up before the wait</pre>
-<b>Check by hand:</b> the third thing, which no prompt will give you: the <code>--session_service_uri</code> you pass at run time. The code can be perfect and still forget everything if the sessions live in memory, and on a laptop it will look like it works.
+<b>Check by hand:</b> Ensure `--session_service_uri` is passed at runtime. Without external persistent session storage, sessions remain in-memory and state will be lost on process restart.
 </aside>
 
 > **The agent was not running for those forty minutes. Something outside it
@@ -1722,10 +1672,16 @@ ResumabilityConfig(is_resumable=True)         # the run may pause and be picked 
 
 ## Staleness & Idempotency
 
+### Old Information and Double Purchases
 
-An agent that is missing information asks you for it. An agent holding out-of-date information just acts, and sounds certain. So some facts have to be read again immediately before you use them — and anything that spends money has to be safe to run twice.
+Long-running agents store history and past turns. But because time passes while the agent waits, the world changes outside it. This causes two big issues:
 
-**Do not load new code yet.** Stay on the previous step's agent, it can buy tickets and it has no idea it should be careful.
+1. **Stale Data**: Facts from earlier in the chat (like seat availability or prices) go out of date. Instead of realizing its information is old, the agent acts with confidence on stale numbers.
+2. **Duplicate Actions**: If a process crashes or retries a payment, it might buy tickets twice unless the operation is safe to run multiple times (idempotent).
+
+For long-running agents, timing matters: re-check dynamic facts immediately before acting, and make sure financial actions are safe to retry.
+
+**Do not load new code yet.** Stay on the previous step's agent (it can buy tickets, but currently has no safeguards for staleness or idempotency).
 
 👉🔴 Press **RESET THE VENUE**, then start a **new session** in `adk web` —
 the **+ New Session** button above the chat.
@@ -1769,8 +1725,7 @@ In thirty seconds one of them will not be.
 Buy the two section A seats.
 ```
 
-Watch what it does. It calls `purchase(section="A")` straight away, with no check
-of any kind, and watch the venue refuse it:
+It executes `purchase(section="A")` without re-verifying seat availability, causing the venue API to return an error response:
 
 ```
 {"error": "sold_out", "available": 0,
@@ -1782,11 +1737,11 @@ Oh no! It looks like the Section A tickets just sold out. Let me get an
 updated seat map to see what's still available.
 ```
 
-![The venue refuses: section A is gone](img/07-01-bug2.png)
+![Venue API error: section A is sold out](img/07-01-bug2.png)
 
-Notice it only re-read the seat map **after** being told no. Stop looking for something *missing* from its context, and look instead at what was *present*: two turns ago it read "section A: 400 available", and that sentence was still sitting in the conversation the model got handed.
+Notice the agent only re-queried the seat map **after** receiving an API error response. The root cause is stale context: earlier in the session, the agent recorded "section A: 400 available", and that turn remained in the conversation history passed to the model.
 
-Be clear about where the old information is sitting. Rule out `temp:seatmap`, which the last step showed you never gets saved. Look in the **conversation**, and accept that no state prefix fixes that.
+Be clear about where the old information is stored: it persists in the **conversation history**, which state prefixes like `temp:` cannot override.
 
 ![The seat map the agent is still working from](img/07-02-bug1.png)
 
@@ -1826,13 +1781,13 @@ It looks like there was a problem processing the purchase and it timed out.
 Please try again.
 ```
 
-👉 Look at the panel **before you do anything else**. It says **one order**.
+👉 Look at the venue panel **before proceeding**. The panel shows **one order**.
 
-![One order on the panel, while the agent thinks it failed](img/07-01-bug4.png)
+![One order recorded on the venue panel despite the timeout response](img/07-01-bug4.png)
 
-The purchase did not fail. The venue took the money, wrote the order, and *then* the response died on the way back. From where the agent is standing those two things look identical, with no way to tell them apart.
+The purchase transaction succeeded on the backend, but the response timed out before returning to the client. From the client's perspective, an unacknowledged timeout is indistinguishable from a failed request.
 
-👉✨ Do what the agent asked:
+👉✨ Send a retry message:
 
 ```
 Yes, try again.
@@ -1845,7 +1800,7 @@ on November 14th was successful. The total cost is $420.
 
 ![The agent reports success after retrying](img/07-01-bug5.png)
 
-👉 The panel now reads:
+👉 The venue panel now displays:
 
 ```
 Bought 2 times
@@ -1854,9 +1809,7 @@ The retry went through again. This is the bug an idempotency key fixes.
 
 ![Two orders for one booking](img/07-01-bug6.png)
 
-Four tickets, $840, for a show you wanted to see once. The agent's report was honest: from what it could see, it went well.
-
-Something tried the purchase again. 
+Retrying non-idempotent operations without an idempotency key creates duplicate transactions. Sending an idempotency key allows the venue API to detect duplicate requests and return the original order.
 
 **Assume the venue cannot tell any of them apart.** So fix it with a key the venue recognises, not a setting on your side.
 
@@ -1974,10 +1927,13 @@ Check the order count. It stays at **1**.
 
 ## Autonomous Workflow
 
+### LLMs Are Bad at Following Rigid Rules Every Single Time
 
-Up to now, every step happened because **the model decided it should**. Join the queue before looking at seats. Check the queue before buying. Re-read the seat map after the wait. All of it came from an instruction and the model's reading of where things stood.
+LLMs are great at making decisions (like picking a show based on user preferences). But relying on an LLM to follow strict step-by-step rules (like "always join the queue before checking seats") means it will occasionally skip steps or mess up the order.
 
-Mostly it works. You have also watched it not: the run that asked which show instead of queueing, the one that argued about a queue position it had not checked, the one that did the arithmetic itself instead of handing it over. Each time the fix was a firmer instruction, and each time you were negotiating with a model about the order of operations.
+To fix this, split the workflow into two types of steps:
+- **Fixed Rules (Code Functions)**: Steps that must happen the exact same way every time (taking a queue ticket, checking position) are written as ordinary code nodes.
+- **Decisions (Agent Nodes)**: Steps requiring judgment (choosing seat sections, checking user preferences) are given to the AI agent.
 
 **Look at what is actually in this flow.** Some of it has no judgement in it at
 all:
@@ -2047,9 +2003,7 @@ from .nightly import nightly
 root_agent = nightly                       # ← what adk web actually runs
 ```
 
-Remember `adk web` runs whatever the module calls `root_agent`, and from this
-step on point that at the graph. Do not read `buyer_agent` as gone or diminished:
-find it as the last node in that graph, with every tool and callback intact.
+Note that `adk web` executes whichever object is assigned to `root_agent`. Here, `root_agent` points to the `nightly` Workflow graph, with `buyer_agent` configured as the final node in the graph.
 
 <aside class="negative">
 <b>⚠️ <code>adk web</code> treats every folder under <code>agent/</code> as an app,</b> and if any one of them is not a valid agent package the whole dropdown fails to load. Running things from inside <code>agent/</code> can leave a stray <code>memory/</code> or <code>artifacts/</code> folder behind, which is enough to do it. <code>ls agent/</code> should show <code>concert/</code> and nothing else. <code>./use-solution.sh 8</code> tidies it for you.
@@ -2063,11 +2017,7 @@ find it as the last node in that graph, with every tool and callback intact.
 go
 ```
 
-Ignore the word you typed. This flow has no user and nothing reads your message.
-Sending one is simply how `adk web` starts a run.
-
-Sit with that. You are typing into a chat box, and there is no conversation on
-the other side of it.
+Note: In an automated workflow graph, initial execution starts without waiting for user input. Sending a message in `adk web` triggers the initial run.
 
 👉 **Now look at the web browser.** The left panel draws the graph and colours in the nodes as they run. The right panel is the event stream, watched how the decisions are being made:
 
@@ -2087,8 +2037,7 @@ for a process holding your place and find none.
 
 #### 3. Wake it up — and mind which box you type in
 
-Scroll the event stream to the last event, **`adk_request_input`**. Do not read
-it as a log line. Look for the input box of its own:
+Scroll the event stream to the **`adk_request_input`** event and locate the input box associated with that specific event:
 
 ![The graph, parked at check_front](img/08-01-flow7.png)
 
@@ -2241,10 +2190,11 @@ Rules:
 
 ## Working With a Human
 
+### Don't Spend Money Without Double-Checking with a Person
 
-How much of your credit card would you hand this thing while you are gone?
+An autonomous agent running overnight shouldn't make expensive financial choices based on guessed or ambiguous preferences from chat history.
 
-Messages could be confusing since your previous conversation could contain mix messages, and it's always best to confirm with user on how much they want to spend ultimatly on the tickets to make the final call. So now we'll let the agent introduce that absolute approval from human, and confirm before sets of the agent <- correct my english. 
+Before executing high-stakes actions (like spending money on tickets), the agent must pause, ask the user to confirm their budget out loud, and save that explicit confirmation before making any purchases.
 
 
 👉🔴 On the **venue panel**, press **RESET THE VENUE**. Every step starts from
@@ -2521,15 +2471,14 @@ scheduler does not, and the same deployed service handles both.</pre>
 
 ## The Cloud Stack
 
-Your agent survives restarts, re-checks its facts, agrees a budget with a human,
-and runs as a graph. It still only runs while your laptop is awake.
+### Laptops Sleep and Local Files Disappear
 
-And do not plan on leaving a laptop running. Take it with you, let it sleep on
-the train, watch the battery go, close the lid at midnight, and miss the 10am
-presale. Watch everything you built for an agent that works while you sleep get
-undone by the machine it happens to be sitting on.
+On your laptop, an agent depends on your computer staying awake, local SQLite databases, and local files. If you close your laptop lid or deploy to a cloud container that restarts, local files and memory disappear.
 
-So give it somewhere permanent to live.
+To run reliably in production:
+1. **Cloud Compute**: Run the agent in a container (like Cloud Run) that stays online.
+2. **Durable Cloud Databases**: Replace local files and SQLite with cloud services (Cloud SQL for session data, Cloud Storage for files).
+3. **Cloud Timers**: Use managed schedulers (like Cloud Scheduler and Pub/Sub) so the agent wakes up even when your laptop is turned off.
 
 👉🔴 On the **venue panel**, press **RESET THE VENUE**. Every step starts from
 the same world: 8 shows, all seats available, clock at 1×.
@@ -2656,9 +2605,7 @@ cron job with retries and a timezone that keeps working when your laptop is shut
 
 ### Create them
 
-Get yourself a database, a user for the agent to log in as, and a bucket. Expect
-the Cloud SQL instance to have been building since `setup.sh` ran, because it
-takes eight to twelve minutes and nobody should watch that happen.
+Provision a PostgreSQL database, database user, and Cloud Storage bucket. Note that Cloud SQL instance creation takes several minutes and was initiated in the background during `setup.sh`.
 
 👉💻 Collect it, and make the rest:
 
@@ -2950,28 +2897,6 @@ unchanged.** Diff `solutions/step10_deploy/concert/` against the folder you
 finished step 9 with and see it byte for byte. That is the argument for ADK's
 service abstraction, and it is the last thing worth remembering.
 
-### Everything you just learned, in one place
-
-Count ten steps, each adding exactly one idea. If you remember nothing else,
-remember which problem each of these solves.
-
-| The idea | The problem it solves |
-|---|---|
-| **An instruction is not autonomy** | A prompt is text handed to a model when something calls the agent. It can never be the thing that does the calling. |
-| **A trigger and a triggerer** | An endpoint with a Runner behind it, and something separate that knows the time. Keep them apart and only the second one changes when you deploy. |
-| **A frontend that is not a dev tool** | `adk web` is for looking inside a run. It does not survive leaving your laptop, and it is not what you hand to a person. |
-| **Four places a fact can live** | `temp:` is gone before it is written. Session state is this conversation. `user:` is this person. A memory file is everything you have ever learned. Choosing wrongly is how facts get lost. |
-| **Compaction rewrites your history** | The model stops reading what was said and starts reading a summary nobody reviewed. Anything you cannot lose goes somewhere that is never summarised. |
-| **`LongRunningFunctionTool` + `ResumabilityConfig`** | The run parks instead of blocking. Nothing loops, nothing burns tokens, and the process can die. |
-| **A session store outside the process** | The only reason a parked run can be resumed at all. |
-| **`before_tool_callback`** | A gate the call has to pass through, not a request you make of the model. Re-read the world in the instant before you act on it. |
-| **Idempotency keys** | Something you did not write will retry your purchase. The venue has to recognise the second one. |
-| **`Workflow` graphs** | Steps that must not vary are functions. Steps that need judgement are agents. At 3am nobody notices a model being creative. |
-| **`RequestInput` interrupts** | One mechanism for two kinds of waiting: a queue that is not ready, and a person who has not answered. |
-| **`rerun_on_resume`** | Which nodes redo themselves when woken. Get it wrong and every wake-up takes another queue ticket. |
-| **Bounded authority** | The number came from the person, they confirmed it, and it lives where the conversation cannot reach it. |
-| **Attendedness is per request** | The same deployed service serves a browser and a scheduler. Only one of them can answer a question. |
-| **Durable state** | A container's filesystem dies with the container. Sessions, memory and artifacts all need somewhere that outlives it. |
 
 ### Building your own
 
@@ -3032,19 +2957,10 @@ Reach for the complete working code at any step:
 ### When something breaks
 
 
-
-
-
-
-
-
-
-
-
 | Symptom | Fix |
 |---|---|
 | `✗ Cannot access project` | Wrong id. `rm ~/project_id.txt && ./setup.sh` |
-| Model returns 404 | `-latest` aliases are AI Studio only. Use `ADK_MODEL=gemini-2.5-flash` |
+| Model returns 404 | `-latest` aliases are AI Studio only. Use `ADK_MODEL=gemini-latest-flash` |
 | `address already in use` | Something already has port 8000 or 8090. `lsof -ti:8000 \| xargs kill -9` |
 | Agent can't reach the venue | `curl $VENUE_URL/health`, or `./deploy-venue.sh` again |
 | Queue never advances | Press **SKIP THE WAIT**. At 1× the queue will not reach the front on its own |
