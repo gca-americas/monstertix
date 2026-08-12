@@ -2613,12 +2613,7 @@ living somewhere permanent.
 **Why Pub/Sub in the middle.** Cloud Scheduler could call your service directly,
 so the topic looks like an extra step. It buys you three things:
 
-```
-   Cloud Scheduler ──► Pub/Sub topic ──► push subscription ──► your agent
-     fires on a cron    holds the           delivers, and       runs
-                        message             retries if the
-                                            agent is down
-```
+![alt text](img/10-02-flow.png)
 
 **It holds the message.** Let the agent be deploying, restarting, or briefly
 broken at 3am, and expect the message to wait instead of vanish. **It retries**,
