@@ -307,7 +307,7 @@ An ordinary function. No decorator, no registration, no schema to write. ADK rea
 
 👉 The icons down the far-left edge switch what the panel shows. The second one is the **agent graph** — try it and you should see two tools.:
 
-TODO: do a screen grab
+![Agent graph showing search_events and get_seatmap tools](img/01-02-tool.png)
 
 
 <aside class="positive">
