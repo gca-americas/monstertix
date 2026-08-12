@@ -2544,11 +2544,11 @@ agent, same venue — served by the production entrypoint this time.
 👉💻 And check the endpoint a scheduler would call actually exists:
 
 ```bash
-curl -s localhost:8092/openapi.json | grep -o '/apps/{app_name}/trigger/pubsub'
+curl -s localhost:8092/openapi.json | grep -o '/apps/concert/trigger/pubsub'
 ```
 
 ```
-/apps/{app_name}/trigger/pubsub
+/apps/concert/trigger/pubsub
 ```
 
 One app, two doors:
