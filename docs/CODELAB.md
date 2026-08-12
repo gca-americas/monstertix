@@ -2661,7 +2661,7 @@ fresh session with no conversation in it.
 👉✨ Ask it to book:
 
 ```
-Book me two tickets for The Midnight Signal. Best seats in the house,
+Book me 3 tickets for The Midnight Signal in Tokyo. Best seats in the house,
 I don't want the cheap ones.
 ```
 
@@ -2674,95 +2674,11 @@ and read the number back before committing to it.
 up to 250 a seat for the good ones
 ```
 
-Stop on the fact that it asks at all, because the obvious implementation of
-"don't ask at 3am" breaks it.
-
-Give `agree_budget` a way to know whether anybody is there to answer. Reach for
-an environment variable, set `UNATTENDED=1` on the deploy, and skip the question.
-Now look at the shape of what you just built:
-
-```
-  ONE deployed service, TWO kinds of caller
-
-  your browser  ──► /wake                        somebody is plainly here
-  Cloud Sched.  ──► /trigger/wake                nobody is
-```
-
-Notice both arrive at the same process. Ask a variable read once at boot to tell
-them apart and it cannot, so setting it silences the question for the browser
-too. Now you have an agent that spends a number you never agreed to, which is the
-one thing the whole of Module 5 exists to prevent.
-
-**"Is a person here?" is a fact about a request, not about a process.** So the
-variable is only the *default*, unattended, the safe assumption for anything a
-scheduler can reach, and the `/wake` route, which only ever runs because somebody
-typed, overrides it for the length of that one request:
-
-```python
-# concert/budget.py
-_attended = contextvars.ContextVar("attended", default=None)
-
-def mark_attended(value=True):     # called by /wake, never by the trigger
-    _attended.set(value)
-
-def someone_is_there():
-    marked = _attended.get()
-    return marked if marked is not None else not _UNATTENDED_BY_DEFAULT
-```
-
-Note a `ContextVar` is scoped to the asyncio task, which in FastAPI is exactly
-one request. Two callers, one process, different answers:
-
-| Caller | `someone_is_there()` | What happens |
-|---|---|---|
-| `adk web` on your laptop | `True` | asks, and confirms |
-| MonsterTix `/wake`, deployed | `True` | asks, and confirms |
-| Pub/Sub at 3am | `False` | runs on the standing budget, never stops |
-
-👉🔴 Open your venue panel and press **SKIP THE WAIT**, then tell the agent it is
-at the front:
-
-```
-You're at the front of the queue now.
-```
-
-👉 Watch the panel while it buys. One order, in a database on the other side of
-the world, placed by a container you never logged into.
-
-### Fire it the way 3am will
-
 The run is parked in the queue right now, which is exactly the state 3am finds it
 in. So be 3am.
 
 👉🔴 Press **SKIP THE WAIT** on the venue panel, so the queue is ready when the
 message arrives.
-
-👉💻 Publish to the topic, which is precisely what Cloud Scheduler does:
-
-```bash
-gcloud pubsub topics publish presale-$(gcloud config get-value account | cut -d@ -f1) \
-  --message='The presale just opened.'
-```
-
-👉 **Now watch the browser, and do not touch it.** Within a few seconds the
-agent's reply appears on its own: it bought the tickets, at a price inside what
-you agreed, and told you so.
-
-Nobody typed. Scheduler published, Pub/Sub delivered, your endpoint found the
-session that was waiting, and the run finished.
-
-👉🔴 Check the venue panel. **One order, not two.**
-
-<aside class="positive">
-<b>👀 Developer's Note — why the page noticed.</b> A scheduled run finishes on the server, and nothing about that reaches an open browser on its own. So MonsterTix polls <code>/session/&lt;id&gt;/messages?since=&lt;timestamp&gt;</code> every four seconds and prints whatever is new. Unglamorous, and it survives the tab being closed overnight and reopened in the morning — which is the actual use case, and something a websocket would not have survived.
-</aside>
-
-<aside class="negative">
-<b>⚠️ If it books a second pair of tickets, check where your subscription is pushing.</b>
-<pre>gcloud pubsub subscriptions describe &lt;topic&gt;-push \
-  --format='value(pushConfig.pushEndpoint)'</pre>
-It must end in <code>/trigger/wake</code>. If it ends in <code>/apps/concert/trigger/pubsub</code> you are on ADK's built-in trigger, which starts a brand new session every fire — so it does not resume your booking, it starts another one. <code>deploy-agent.sh</code> updates an existing subscription, but a subscription created by hand earlier will keep whatever endpoint it was born with.
-</aside>
 
 **To run it on a real schedule**, the job has to be enabled — `jobs run` refuses on
 a paused one with `Job.state must be ENABLED`:
@@ -2772,12 +2688,22 @@ gcloud scheduler jobs resume presale-$(gcloud config get-value account | cut -d@
   --location=$GOOGLE_CLOUD_REGION
 ```
 
-And for a demo, make it impatient:
+👉 **Now watch the browser, and do not touch it.** Within a few seconds the
+agent's reply appears on its own: it bought the tickets, at a price inside what
+you agreed, and told you so.
+
+Nobody typed. Scheduler published, Pub/Sub delivered, your endpoint found the
+session that was waiting, and the run finished.
+
+👉🔴 Check the venue panel. **One order.**
+
+Here's how you can make it run every 5 mins:
 
 ```bash
 gcloud scheduler jobs update pubsub presale-$(gcloud config get-value account | cut -d@ -f1) \
   --location=$GOOGLE_CLOUD_REGION --schedule="*/5 * * * *"
 ```
+
 
 <aside class="negative">
 <b>⚠️ Pause it again when you are done.</b> An enabled job fires against your venue every night, or every five minutes if you set the impatient schedule above. <code>gcloud scheduler jobs pause &lt;job&gt; --location=$GOOGLE_CLOUD_REGION</code>.
