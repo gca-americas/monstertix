@@ -27,6 +27,7 @@ gcloud run deploy "$SERVICE" \
   --project "$PROJECT" \
   --region "$REGION" \
   --allow-unauthenticated \
+  --ingress=all \
   --set-env-vars "VENUE_DB=/tmp/venue.db" \
   --quiet
 

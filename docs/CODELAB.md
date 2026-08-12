@@ -16,8 +16,6 @@ Feedback Link: https://github.com/google/monstertix
 
 Most ticketing sites put buyers in a queue, both to prevent server crashes and to manage high demand. You start your purchase and find yourself behind 14,000 people. The queue moves for forty minutes. When your turn finally comes, you have a short window to pick seats and pay. If you miss that window, your place in line is given away.
 
-![The Midnight Signal, on tour](img/poster.png)
-
 Many real-world tasks follow this pattern: **a task that takes far longer than a single conversation, running against an external system you do not control.** Examples include waiting for a supplier to restock, waiting for a claim approval, or waiting in a queue.
 
 Standard AI agents live inside a single chat turn, which lasts seconds and is purely reactive. They cannot wait 40 minutes or act autonomously. To solve this, you need a **long-running agent**: a system that stays dormant during long waits, persists context across process restarts, and resumes automatically when woken by an external trigger.
@@ -49,8 +47,9 @@ First, get your environment ready and make sure you have access to Google Cloud.
 👉💻 Clone the repo and run setup:
 
 ```bash
-git clone <REPO_URL> ~/longrunningag
-cd ~/longrunningag
+cd ~
+git clone https://github.com/gca-americas/monstertix
+cd ~/monstertix
 ./setup.sh
 ```
 
@@ -110,7 +109,7 @@ Rules:
 👉💻 Activate the environment:
 
 ```bash
-cd ~/longrunningag
+cd ~/monstertix
 source .venv/bin/activate
 ```
 
@@ -188,7 +187,7 @@ the same world: 8 shows, all seats available, clock at 1×.
 👉💻 **Terminal 1** — load this step's code and start the **ADK web UI**:
 
 ```bash
-cd ~/longrunningag
+cd ~/monstertix
 . ./set_env.sh
 ./use-solution.sh 2 --force
 adk web agent --port 8000
@@ -210,10 +209,10 @@ What you start with:
 | `venue.py` | an HTTP client for the venue. Nothing interesting |
 | `config.py` | which model to use, and a check that your credentials work |
 
-`. ./set_env.sh` activates the virtualenv, loads your project and model, and exports `$WORKSHOP` — the absolute path to `~/longrunningag`. Run it in **every** terminal you open. It prints what it set:
+`. ./set_env.sh` activates the virtualenv, loads your project and model, and exports `$WORKSHOP` — the absolute path to `~/monstertix`. Run it in **every** terminal you open. It prints what it set:
 
 ```
-  folder   /home/you/longrunningag
+  folder   /home/you/monstertix
   project  your project id
   model    gemini-2.5-flash (We'll avoid using 3.x for now to avoid high usage demands)
   venue    https://venue-yourname-xxxx.run.app
@@ -372,7 +371,7 @@ root_agent = Agent(
 👉💻 In **terminal 1**, restart:
 
 ```bash
-cd ~/longrunningag
+cd ~/monstertix
 adk web agent --port 8000
 ```
 
@@ -435,7 +434,8 @@ the same world: 8 shows, all seats available, clock at 1×.
 👉💻 Load this step's code:
 
 ```bash
-cd ~/longrunningag
+cd ~/monstertix
+. ./set_env.sh
 ./use-solution.sh 3 --force
 ```
 
@@ -498,7 +498,7 @@ The **ADK web UI** has a default one for you. Here you build it yourself, and th
 Start the Runner, 
 
 ```bash
-cd ~/longrunningag
+cd ~/monstertix
 . ./set_env.sh
 python -m monstertix.server
 ```
@@ -607,7 +607,7 @@ Dependencies: standard library plus httpx. No agent framework at all.</pre>
 👉💻 **Terminal 3** — fire once, 10 seconds from now:
 
 ```bash
-cd ~/longrunningag
+cd ~/monstertix
 . ./set_env.sh
 python -m monstertix.clock --in 10
 ```
@@ -686,7 +686,8 @@ You need to match each piece of information to the right storage place and lifet
 
 👉💻 In the **terminal 1**, run:
 ```bash
-cd ~/longrunningag
+cd ~/monstertix
+. ./set_env.sh
 ./use-solution.sh 4 --force
 ```
 
@@ -701,7 +702,8 @@ What changed since the last step:
 👉💻 Restart the agent in **terminal 1**:
 
 ```bash
-cd ~/longrunningag
+cd ~/monstertix
+. ./set_env.sh
 adk web agent --port 8000 \
   --session_service_uri="sqlite+aiosqlite:///$WORKSHOP/sessions.db" \
   --artifact_service_uri="file://$WORKSHOP/artifacts"
@@ -821,7 +823,7 @@ ADK has three locations to store them:
 👉💻 Here we chooise files:
 
 ```bash
-ls -R ~/longrunningag/artifacts
+ls -R ~/monstertix/artifacts
 ```
 
 To move from your laptop to Cloud Storage, change `file://` to `gs://`. (We'll see this in Step 10)
@@ -980,7 +982,7 @@ The `user:` prefix (e.g. `user:prefs`) scopes state across all sessions for a gi
 👉💻 Open it in the editor:
 
 ```bash
-cloudshell edit ~/longrunningag/memory/userx.md
+cloudshell edit ~/monstertix/memory/userx.md
 ```
 
 Three bookings, going back to January. The agent reads it when it calls `recall()`, and it will still be there even if we lost the session data.
@@ -1079,7 +1081,8 @@ the same world: 8 shows, all seats available, clock at 1×.
 👉💻 Move to this step's code:
 
 ```bash
-cd ~/longrunningag
+cd ~/monstertix
+. ./set_env.sh
 ./use-solution.sh 5 --force
 ```
 
@@ -1169,7 +1172,8 @@ What makes it different is where the text sits. An ordinary event carries a
 👉💻 Look at it in your own database:
 
 ```bash
-cd ~/longrunningag
+cd ~/monstertix
+. ./set_env.sh
 sqlite3 sessions.db \
   "select json_extract(event_data,'\$.actions.compaction.compacted_content.parts[0].text')
    from events where event_data like '%compaction%';"
@@ -1234,7 +1238,7 @@ Prefer the short prompt: cheaper, faster, and much harder to derail. Rely on the
 👉💻 In **terminal 1**, Ctrl-C and restart with the same flags:
 
 ```bash
-cd ~/longrunningag
+cd ~/monstertix
 adk web agent --port 8000 \
   --session_service_uri="sqlite+aiosqlite:///$WORKSHOP/sessions.db" \
   --artifact_service_uri="file://$WORKSHOP/artifacts"
@@ -1280,7 +1284,8 @@ Somewhere in those turns, ADK summarised the earlier ones.
 👉💻 In a new **Terminal**, run to read it directly:
 
 ```bash
-cd ~/longrunningag
+cd ~/monstertix
+. ./set_env.sh
 ./show-compaction.sh
 ```
 
@@ -1454,7 +1459,8 @@ the same world: 8 shows, all seats available, clock at 1×.
 👉💻 Move to this step's code:
 
 ```bash
-cd ~/longrunningag
+cd ~/monstertix
+. ./set_env.sh
 ./use-solution.sh 6 --force
 ```
 
@@ -1476,7 +1482,8 @@ What changed since the last step:
 👉💻 **Terminal 1** — the agent, unchanged:
 
 ```bash
-cd ~/longrunningag
+cd ~/monstertix
+. ./set_env.sh
 adk web agent --port 8000 \
   --session_service_uri="sqlite+aiosqlite:///$WORKSHOP/sessions.db" \
   --artifact_service_uri="file://$WORKSHOP/artifacts"
@@ -1527,7 +1534,8 @@ Ctrl-C
 👉💻 Start it again in **terminal 1**:
 
 ```bash
-cd ~/longrunningag
+cd ~/monstertix
+. ./set_env.sh
 adk web agent --port 8000 \
   --session_service_uri="sqlite+aiosqlite:///$WORKSHOP/sessions.db" \
   --artifact_service_uri="file://$WORKSHOP/artifacts"
@@ -1550,7 +1558,7 @@ You are currently at position 12982 in the queue. It is not your turn yet.
 👉💻 See why:
 
 ```bash
-cd ~/longrunningag
+cd ~/monstertix
 sqlite3 sessions.db "select name from pragma_table_info('events');"
 ```
 
@@ -1822,14 +1830,16 @@ Retrying non-idempotent operations without an idempotency key creates duplicate 
 👉💻 *Now* load this step's code:
 
 ```bash
-cd ~/longrunningag
+cd ~/monstertix
+. ./set_env.sh
 ./use-solution.sh 7 --force
 ```
 
 👉💻 In **terminal 1**, Ctrl-C and restart:
 
 ```bash
-cd ~/longrunningag
+cd ~/monstertix
+. ./set_env.sh
 adk web agent --port 8000 \
   --session_service_uri="sqlite+aiosqlite:///$WORKSHOP/sessions.db" \
   --artifact_service_uri="file://$WORKSHOP/artifacts"
@@ -1961,7 +1971,8 @@ the same world: 8 shows, all seats available, clock at 1×.
 👉💻 Move to this step's code:
 
 ```bash
-cd ~/longrunningag
+cd ~/monstertix
+. ./set_env.sh
 ./use-solution.sh 8 --force
 ```
 
@@ -1970,7 +1981,8 @@ cd ~/longrunningag
 👉💻 In **terminal 1**, Ctrl-C and restart. Same command as always:
 
 ```bash
-cd ~/longrunningag
+cd ~/monstertix
+. ./set_env.sh
 adk web agent --port 8000 \
   --session_service_uri="sqlite+aiosqlite:///$WORKSHOP/sessions.db" \
   --artifact_service_uri="file://$WORKSHOP/artifacts"
@@ -2203,7 +2215,8 @@ the same world: 8 shows, all seats available, clock at 1×.
 👉💻 Move to this step's code:
 
 ```bash
-cd ~/longrunningag
+cd ~/monstertix
+. ./set_env.sh
 ./use-solution.sh 9 --force
 ```
 
@@ -2212,7 +2225,8 @@ cd ~/longrunningag
 👉💻 In **terminal 1**, Ctrl-C and restart. Same command as before:
 
 ```bash
-cd ~/longrunningag
+cd ~/monstertix
+. ./set_env.sh
 adk web agent --port 8000 \
   --session_service_uri="sqlite+aiosqlite:///$WORKSHOP/sessions.db" \
   --artifact_service_uri="file://$WORKSHOP/artifacts"
@@ -2486,7 +2500,8 @@ the same world: 8 shows, all seats available, clock at 1×.
 👉💻 Move to the final code:
 
 ```bash
-cd ~/longrunningag
+cd ~/monstertix
+. ./set_env.sh
 ./use-solution.sh 10 --force
 ```
 
@@ -2523,7 +2538,8 @@ a build.
 👉💻 **Terminal 2:**
 
 ```bash
-cd ~/longrunningag/agent
+cd ~/monstertix
+. ./set_env.sh
 uvicorn main:app --port 8092
 ```
 
@@ -2610,7 +2626,7 @@ Provision a PostgreSQL database, database user, and Cloud Storage bucket. Note t
 👉💻 Collect it, and make the rest:
 
 ```bash
-cd ~/longrunningag
+cd ~/monstertix
 ./setup-cloud-state.sh
 ```
 
@@ -2655,7 +2671,7 @@ With the services ready, give the agent its permanent home.
 👉💻 Three or four minutes. Start it and read on:
 
 ```bash
-cd ~/longrunningag
+cd ~/monstertix
 ./deploy-agent.sh
 ```
 
