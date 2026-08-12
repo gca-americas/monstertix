@@ -313,6 +313,7 @@ if [ "${CHECK:0:2}" = "OK" ]; then
   # yet — enablement propagates, and the first deploy after it can fail with
   # "API has not been used in project ... before or it is disabled". So try
   # twice, with a pause, before believing it.
+  echo "→ venue      deploying to Cloud Run (1-2 min)..."
   if ! ./deploy-venue.sh >/tmp/venue-deploy.log 2>&1; then
     if grep -qiE "has not been used in project|is disabled|SERVICE_DISABLED|PERMISSION_DENIED" /tmp/venue-deploy.log; then
       echo "→ venue      APIs still switching on, waiting 30s and retrying"

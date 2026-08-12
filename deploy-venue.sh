@@ -19,6 +19,7 @@ SERVICE="${VENUE_SERVICE:-venue-${WHO:-student}}"
 echo "→ project   $PROJECT"
 echo "→ region    $REGION"
 echo "→ service   $SERVICE"
+echo "→ deploying to Cloud Run (1-2 min)..."
 echo ""
 
 gcloud run deploy "$SERVICE" \
@@ -28,6 +29,13 @@ gcloud run deploy "$SERVICE" \
   --allow-unauthenticated \
   --set-env-vars "VENUE_DB=/tmp/venue.db" \
   --quiet
+
+gcloud run services add-iam-policy-binding "$SERVICE" \
+  --project "$PROJECT" \
+  --region "$REGION" \
+  --member="allUsers" \
+  --role="roles/run.invoker" \
+  --quiet >/dev/null 2>&1 || true
 
 URL=$(gcloud run services describe "$SERVICE" \
         --project "$PROJECT" --region "$REGION" --format='value(status.url)')
