@@ -12,14 +12,12 @@ _root="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 # by creating a second empty sessions.db instead of erroring.
 export WORKSHOP="$_root"
 
-_shell_region="${GOOGLE_CLOUD_REGION:-}"
-# Your answers from ./setup.sh
+# Your answers from ./setup.sh (.env is loaded and exported)
 if [ -f "$_root/.env" ]; then
   set -a
   . "$_root/.env"
   set +a
 fi
-[ -n "$_shell_region" ] && export GOOGLE_CLOUD_REGION="$_shell_region"
 
 # The virtualenv, so `adk` and `python` are the right ones
 if [ -d "$_root/.venv" ]; then
@@ -62,6 +60,7 @@ export MEMORY_USER="userx"
 
 echo "  folder   $WORKSHOP"
 echo "  project  $GOOGLE_CLOUD_PROJECT"
+echo "  region   $GOOGLE_CLOUD_REGION"
 echo "  model    $ADK_MODEL"
 # Say which venue this terminal is talking to, and say it loudly when it is a
 # local one — a local venue that nobody notices is a whole afternoon.
