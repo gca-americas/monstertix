@@ -466,14 +466,6 @@ So write that something in the next step. Allow forty lines.
 
 ## Event-Driven Dormancy
 
-
-> **What this step teaches**
->
-> Something outside the agent has to invoke it, and that something splits in
-> two: an endpoint that can run the agent, and a clock that calls the endpoint.
-> Neither half knows about the other's job — which is why they survive all the
-> way to Cloud Run and Cloud Scheduler unchanged.
-
 So you are left with a problem: an agent runs only when something calls it, and no wording changes that. So build the something.
 
 👉🔴 On the **venue panel**, press **RESET THE VENUE**. Every step starts from
@@ -495,6 +487,7 @@ nothing about the agent changes in this step. Hold onto that, it is the point.
 | `monstertix/clock.py` | new. Something that knows the time and calls the server |
 
 It has two halves, and they stay in two files all the way to the cloud:
+![The trigger and the triggerer, kept apart](img/03-02-ed.png)
 
 | | | becomes, in step 10 |
 |---|---|---|
@@ -535,15 +528,7 @@ async def wake(payload: dict = Body(default={})):
 
 An `Agent` does not run itself. It is a description: a name, a model, an instruction, a list of tools. Something has to take an incoming message, find the right session, hand the model the conversation so far, execute whichever tools it asks for, feed the results back, loop until it stops calling tools, and write every step of that to storage. That something is the `Runner`.
 
-```
-   message ─►  Runner  ─►  model decides
-                 │            │
-                 │            ▼
-                 │        your Python runs
-                 │            │
-                 ▼            ▼
-            session store ◄── every step written down
-```
+![What a Runner does around your agent](img/03-01-flow.png)
 
 The **ADK web UI** has a default one for you. Here you build it yourself, and that is the entire difference between the **ADK web UI** and something you can deploy. 
 
@@ -559,7 +544,7 @@ python -m monstertix.server
 
 ```
 [server] agent concert · gemini-x-flash
-[server] listening on http://127.0.0.1:8090/wake
+[server] listening on http://xxxx_URL/wake
 [server] nothing will happen until something calls it. Ctrl-C to stop.
 ```
 
@@ -723,23 +708,7 @@ It bought *something*. Look at what it had to guess. It picked Amsterdam and sec
 
 ## Managing Context Lifetime
 
-
-
-
-
-
-
-<aside class="positive">
-<b>👀 Developer's Note — the clock.</b> The venue owns a speed multiplier, and it starts at <b>1×</b>: a 40-minute queue really does take 40 minutes, so nothing runs away from you while you read. <b>SKIP THE WAIT</b> is how you get to the front. Turn the clock up to 60× if you want to watch the queue drain by itself — the same 40 minutes then takes 40 seconds. Your agent code is byte-identical at either setting and cannot tell the difference, which is the point: we are teaching the architecture, and the architecture does not care what the wall clock says.
-</aside>
-
-
-
-> **What this step teaches**
->
-> An agent stores what it knows in four different places. Each place lasts a
-> different length of time. Pick the wrong one and the agent either forgets
-> something it needed, or hangs on to something that has gone out of date.
+An agent stores what it knows in four different places. Each place lasts a different length of time. If you choose the wrong one and the agent either forgets something it needed, or hangs on to something that has gone out of date.
 
 ### Load the code
 
@@ -802,7 +771,11 @@ in an editor:
 
 
 
+
+
 ### The three tools we added
+
+![The three tools, and where each one writes](img/04-02-impl.png)
 
 **`note_companion`** records who is coming and what limits them:
 
@@ -888,6 +861,8 @@ To move from your laptop to Cloud Storage, change `file://` to `gs://`. (We'll s
 
 ### Our memory store
 
+![Memory as an interface, with a file behind it](img/04-02-contextmgnt.png)
+
 ADK gives you an interface for long-term memory called `BaseMemoryService`. It has two methods:
 
 ```python
@@ -919,6 +894,40 @@ class MarkdownMemoryService(BaseMemoryService):
 `SearchMemoryResponse` and `MemoryEntry` are ADK's types, and Memory Bank returns the same objects. One has a managed service behind it. Ours has a file.
 
 Choose a file for one reason: you can open it and read it. Your agent's entire long-term memory is a page of text.
+
+### So where do you point it?
+
+Two of the three services are chosen on the command line. The third is not, and
+that catches people out:
+
+| Service | Where you set it | This workshop |
+|---|---|---|
+| session | `--session_service_uri` on `adk web` | `sqlite+aiosqlite:///$WORKSHOP/sessions.db` |
+| artifact | `--artifact_service_uri` on `adk web` | `file://$WORKSHOP/artifacts` |
+| **memory** | **nowhere on the command line** | `MEMORY_DIR`, read inside `agent/concert/memory.py` |
+
+`adk web` does have a `--memory_service_uri`, and it will not help you here. It
+accepts `memory://`, `rag://` and `agentengine://` — the implementations ADK
+ships — and there is no scheme that means "the class I just wrote". A flag takes
+a string, and a string cannot be an object.
+
+So `memory.py` constructs the service itself, from an env var:
+
+```python
+# agent/concert/memory.py
+MEMORY_DIR = pathlib.Path(os.environ.get("MEMORY_DIR", "./memory"))
+MEMORY_USER = os.environ.get("MEMORY_USER", "userx")
+memory_service = MarkdownMemoryService(MEMORY_DIR)
+```
+
+`. ./set_env.sh` exports both, which is why sourcing it in every terminal
+matters. Get `MEMORY_DIR` wrong and the agent reads an empty directory; get
+`MEMORY_USER` wrong and it reads a file that does not exist. Neither is an
+error — you simply get an agent that has never met you.
+
+<aside class="negative">
+<b>⚠️ <code>MEMORY_USER</code> is not the session's user id, and that is deliberate.</b> <code>adk web</code> hardcodes <code>userId=user</code> and cannot be told otherwise, while your own server and the deployed service use something else. Key the file off the session and the memory file changes name depending on which surface you are on: your laptop writes <code>user.md</code> and Cloud Run reads something different. One fixed name is what lets a single memory file work across all three.
+</aside>
 
 <aside class="negative">
 <b>⚠️ We call this service from a tool, which is not where it belongs.</b> A memory service belongs on the Runner, and ADK then uses it for you:
@@ -1044,24 +1053,7 @@ Three bookings, going back to January. The agent reads it when it calls `recall(
 **Read that table as being about the containers, not about what is in them.**
 `memory/userx.md` survives everything, and it only ever contains what `remember()`chose to put there. Nothing writes your current conversation into it. So the file outliving a session is not the same as the agent remembering what you were just talking about, and step 5 is where that distinction bites.
 
-```
-                       ┌─────────────────────────────────────────┐
-   one turn            │  temp:seatmap        stripped on save   │
-                       └─────────────────────────────────────────┘
-        ┌──────────────────────────────────────────────────────────┐
-   one  │  party_size          in the session row                  │
-   book └──────────────────────────────────────────────────────────┘
-   ┌───────────────────────────────────────────────────────────────────┐
-   │  user:prefs            against the user, across every session     │
-   └───────────────────────────────────────────────────────────────────┘
-   ┌───────────────────────────────────────────────────────────────────┐
-   │  memory/userx.md   a file. outlives the database entirely     │
-   └───────────────────────────────────────────────────────────────────┘
-
-   ┌───────────────────────────────────────────────────────────────────┐
-   │  artifacts/            bytes. never in a prompt, only a filename  │
-   └───────────────────────────────────────────────────────────────────┘
-```
+![Five places a fact can live, and how long each lasts](img/04-02-fivestage.png)
 
 ### What state is
 
@@ -1125,12 +1117,10 @@ In `two-days-ago` you saw a summary sitting where somebody's first few turns use
 
 ## Context Degradation?
 
+When a conversation gets long, ADK replaces the old turns with a summary. A summary keeps the general shape of what was said and loses the details. So anything you cannot afford to lose has to be stored somewhere else.
 
-> **What this step teaches**
->
-> When a conversation gets long, ADK replaces the old turns with a summary. A
-> summary keeps the general shape of what was said and loses the details. So
-> anything you cannot afford to lose has to be stored somewhere else.
+
+![Compaction works on the session. Memory is a separate store](img/05-02-intro.png)
 
 👉🔴 On the **venue panel**, press **RESET THE VENUE**. Every step starts from
 the same world: 8 shows, all seats available, clock at 1×.
@@ -1179,13 +1169,7 @@ ADK summarises turns 1, 2 and 3. Three turns later it summarises the next
 batch. With `overlap_size=1` that second summary starts at turn 3 again, not
 turn 4:
 
-```
-overlap_size=0     summary A: turns 1 2 3
-                   summary B: turns       4 5 6
-
-overlap_size=1     summary A: turns 1 2 3
-                   summary B: turns     3 4 5 6      ← turn 3 twice
-```
+![Two summaries, overlapping by one turn](img/05-02-compaction.png)
 
 Notice turn 3 gets summarised twice. That is deliberate. If you asked a question
 in turn 3 and the agent answered in turn 4, a clean split puts the question in one
@@ -1193,6 +1177,68 @@ summary and the answer in the other, and leaves both confusing. Repeating a turn
 is cheap insurance against cutting a thought in half.
 
 Set both fields. ADK has no default for either.
+
+### Compaction and your memory service never meet
+
+Worth being explicit, because the two words sound related and the systems are not.
+
+
+`EventsCompactionConfig` is set on the **`App`** in `agent.py`, next to
+`root_agent`. It is a property of the application, not of any service:
+
+```python
+# agent/concert/agent.py
+app = App(
+    name="concert",
+    root_agent=root_agent,
+    events_compaction_config=EventsCompactionConfig(
+        compaction_interval=3,
+        overlap_size=1,
+    ),
+)
+```
+
+Nothing in that block mentions memory, and nothing in `memory.py` mentions
+compaction. **A summary rewrites the conversation. It does not rewrite the file.**
+
+That is the whole reason `remember()` exists as a deliberate call. Anything left
+in the transcript is eventually read as a paraphrase somebody else wrote;
+anything written to the file is read exactly as it was stored, tomorrow and next
+week. The end of this step is where you watch that difference land.
+
+### Where the summary is actually kept
+
+In `sessions.db`, in the **`events`** table — the same table as every other turn.
+A compaction record is not a separate store or a separate file. It is one more
+event row, written by the agent, with a timestamp like any other.
+
+What makes it different is where the text sits. An ordinary event carries a
+`content` field. This one does not: its summary lives under `actions.compaction`.
+
+👉💻 Look at it in your own database:
+
+```bash
+cd ~/longrunningag
+sqlite3 sessions.db \
+  "select json_extract(event_data,'\$.actions.compaction.compacted_content.parts[0].text')
+   from events where event_data like '%compaction%';"
+```
+
+The shape, once you pull it apart:
+
+```
+events row
+└── event_data  (JSON)
+    ├── id, author, timestamp, invocation_id      ← like every other event
+    ├── content                                    ← ABSENT on this one
+    └── actions
+        └── compaction
+            ├── start_timestamp                    ← the window it replaced
+            ├── end_timestamp
+            └── compacted_content.parts[0].text    ← the summary itself
+```
+
+The event stream draws each event from its content. The summary is right there in the database, being sent to the model on every turn.
 
 ---
 
@@ -1219,8 +1265,10 @@ root_agent = Agent(
 
 **Why an agent and not a plain function?** Because the work needs a model. Read "which of these sections fit a $200 budget for four people, and what is the total" as arithmetic wrapped in judgement, with an answer a person has to be able to read. Let a Python function multiply, and do not ask it to decide which options are worth mentioning.
 
-**Then why not let the main agent do it?** Look at the next line. `include_contents="none"` means this agent is handed **none** of the conversation. No group chat, no preferences, no forty tour dates. It gets the request and
+**Then why not let the main agent do it?** Look at the next line `include_contents="none"` means this agent is handed **none** of the conversation. No group chat, no preferences, no forty tour dates. It gets the request and
 nothing else. That flag only exists on an `Agent`, which is the real reason this is an agent rather than a function.
+
+![A sub-agent that sees the request and nothing else](img/05-02-subagent.png)
 
 Prefer the short prompt: cheaper, faster, and much harder to derail. Rely on the arithmetic being immune to something said twenty turns ago, because it never sees it.
 
@@ -1446,13 +1494,7 @@ Here is why. Keep state out of the conversation and no summary touches it. Check
 
 
 
-
-> **What this step teaches**
->
-> While the agent waits, it is not running at all. Nothing is looping and
-> nothing is holding a connection open. For it to come back afterwards, two
-> things have to be true: the session has to be stored outside the process, and
-> something outside has to notice the wait is over.
+While the agent waits, it is not running at all. Nothing is looping and nothing is holding a connection open. For it to come back afterwards, two things have to be true: the session has to be stored outside the process, and something outside has to notice the wait is over.
 
 👉🔴 On the **venue panel**, press **RESET THE VENUE**. Every step starts from
 the same world: 8 shows, all seats available, clock at 1×.
@@ -1475,6 +1517,9 @@ What changed since the last step:
 
 `join_queue` returns straight away with a ticket instead of blocking, and
 `ResumabilityConfig` lets the run pause on it and pick up afterwards.
+
+![What resumability adds](img/06-02-intro.png)
+
 
 👉💻 **Terminal 1** — the agent, unchanged:
 
@@ -1517,6 +1562,11 @@ About 2400s at 1×. Safe to kill the agent right now — it will still be here.
 
 The queue is genuinely forty minutes long and it is not going anywhere while you
 work.
+
+<aside class="positive">
+<b>👀 Developer's Note — the clock.</b> The venue owns a speed multiplier, and it starts at <b>1×</b>: a 40-minute queue really does take 40 minutes, so nothing runs away from you while you read. <b>SKIP THE WAIT</b> is how you get to the front. Turn the clock up to 60× if you want to watch the queue drain by itself — the same 40 minutes then takes 40 seconds. Your agent code is byte-identical at either setting and cannot tell the difference, which is the point: we are teaching the architecture, and the architecture does not care what the wall clock says.
+</aside>
+
 
 👉💻 **Kill the agent.**:
 
@@ -1588,26 +1638,32 @@ That distinction matters more than it looks. Replaying would mean a second `join
 <b>👀 Developer's Note — there is no <code>author</code> column.</b> In ADK 2.6.2 the events table is deliberately thin: identifiers, a timestamp, and one <code>event_data</code> blob. Everything else lives inside the JSON. If you want to query by author, pull it out with <code>json_extract(event_data, '$.author')</code>.
 </aside>
 
-```
-  you                    agent                    venue
-   │                       │                        │
-   ├─ "buy tickets" ──────►│                        │
-   │                       ├─ join_queue ──────────►│
-   │                       │◄── #14,203 ────────────┤
-   │◄── "you're 14,203rd"  │                        │
-   │                       ╳  RUN PARKS             │  queue drains
-   │                          nothing running       │  on its own
-   │                                                │
-   │   ══ you kill the agent ══                     │  (unaffected —
-   │                                                │   it is on Cloud Run)
-   │   ══ you start it again ══                     │
-   │                       ┌ session reloaded       │
-   │                       │ from sessions.db       │
-   ├─ "where am I?" ──────►│                        │
-   │                       ├─ check_queue ─────────►│
-   │                       │◄── still #13,699 ──────┤
-   │◄── "still 13,699th"   │                        │
-```
+![The same ticket, across a process that died](img/06-02-timeline.png)
+
+### Why `join_queue` and not `check_queue`
+
+Both functions return in milliseconds. Only one of them is long-running, and the
+difference is not how long the call takes — it is whether the **work** is
+finished when the call returns.
+
+| | what it returns | is the work done? |
+|---|---|---|
+| `join_queue` | a ticket, and position 14,203 | **no.** You are queued, not at the front. Forty minutes of it are still ahead |
+| `check_queue` | a position, right now | **yes.** You asked a question, you got the answer |
+
+`join_queue` hands back a *handle to something still in progress*. That is
+exactly what `LongRunningFunctionTool` models: the tool returns, the work carries
+on somewhere else, and the run is allowed to pause on it.
+
+`check_queue` is a complete question with a complete answer. There is nothing
+pending to wait for, so there is nothing to park on.
+
+**And wrapping it would actively break the step.** If `check_queue` were long-running,
+the run would park every time the agent asked where it was in line — including
+when the answer is *"you are at the front, buy now"*. You would have built an
+agent that suspends itself at the exact moment it should act.
+
+![Which call is still outstanding when it returns](img/06-02-aync.png)
 
 ### What made that work
 
@@ -1667,15 +1723,7 @@ ResumabilityConfig(is_resumable=True)         # the run may pause and be picked 
 ## Staleness & Idempotency
 
 
-
-
-
-> **What this step teaches**
->
-> An agent that is missing information asks you for it. An agent holding
-> out-of-date information just acts, and sounds certain. So some facts have to
-> be read again immediately before you use them — and anything that spends money
-> has to be safe to run twice.
+An agent that is missing information asks you for it. An agent holding out-of-date information just acts, and sounds certain. So some facts have to be read again immediately before you use them — and anything that spends money has to be safe to run twice.
 
 **Do not load new code yet.** Stay on the previous step's agent, it can buy tickets and it has no idea it should be careful.
 
@@ -1740,16 +1788,7 @@ Notice it only re-read the seat map **after** being told no. Stop looking for so
 
 Be clear about where the old information is sitting. Rule out `temp:seatmap`, which the last step showed you never gets saved. Look in the **conversation**, and accept that no state prefix fixes that.
 
-```
-   BUG ONE — the read goes stale
-
-   t=0     join_queue         #14,203
-   t=0     get_seatmap        section A: 400 available   ← goes in the transcript
-   t=12m                      ●  SELL THE GOOD SEATS  →  section A: 0
-   t=40m   woken
-   t=40m   purchase(A, 2)     "400 available" is still in the conversation
-                              ✗  the venue refuses. the agent was certain
-```
+![The seat map the agent is still working from](img/07-02-bug1.png)
 
 ### Bug two: bought twice
 
@@ -1821,21 +1860,7 @@ Something tried the purchase again.
 
 **Assume the venue cannot tell any of them apart.** So fix it with a key the venue recognises, not a setting on your side.
 
-```
-   BUG TWO — the write happens twice
-
-   purchase ──────────────► venue     order created ✓  money taken ✓
-            ◄─ ✗ 503 ──────           the reply never arrives
-
-   something retries...
-   purchase ──────────────► venue     a SECOND order ✓  money taken again ✓
-
-   with an idempotency key:
-
-   purchase  key=a3f9 ────► venue     order created ✓
-            ◄─ ✗ 503 ──────
-   purchase  key=a3f9 ────► venue     "seen a3f9" → returns the FIRST order
-```
+![Committed, then the response failed](img/07-02-bug2.png)
 
 ### Now fix both
 
@@ -1942,23 +1967,37 @@ Check the order count. It stays at **1**.
 <b>Check by hand:</b> that the guard is a <b>callback</b> and not a line in the instruction. Ask for it in the prompt and the model complies most of the time. Ask for it in code and it complies every time, which is the entire difference.
 </aside>
 
-> **Information goes out of date, timeline matters for long running agents.
+> **Information goes out of date. For an agent that waits, when it read
+> something matters as much as what it read.**
 
 ---
 
 ## Autonomous Workflow
 
 
+Up to now, every step happened because **the model decided it should**. Join the queue before looking at seats. Check the queue before buying. Re-read the seat map after the wait. All of it came from an instruction and the model's reading of where things stood.
 
-> **What this step teaches**
->
-> The waiting you did by hand in Module 4 becomes something the framework does:
-> a run that stops, costs nothing, and continues when anything calls it again.
-> Your agent is not replaced by this. It is surrounded by it.
+Mostly it works. You have also watched it not: the run that asked which show instead of queueing, the one that argued about a queue position it had not checked, the one that did the arithmetic itself instead of handing it over. Each time the fix was a firmer instruction, and each time you were negotiating with a model about the order of operations.
 
-You have built every part of an unattended run and never had one. The agent
-searches, waits, re-checks and buys, but only when you type. Take the typing away
-and nothing starts.
+**Look at what is actually in this flow.** Some of it has no judgement in it at
+all:
+
+| Step | Judgement? |
+|---|---|
+| take exactly one queue ticket | **no.** Always one, always before buying |
+| check whether it is your turn | **no.** Ask, read the answer |
+| write the brief for the buyer | **no.** Same sentence, same shape, every time |
+| which show, which section | **yes.** Price, day, who is coming, what they hate |
+| user perference and limitation | **yes.** |
+
+Everything in the first group is a rule. Leaving a rule to a model means it is
+followed *nearly* always, and at 3am nobody is watching the time it is not.
+
+So **ADK's `Workflow` lets you make the fixed parts deterministic and keep an agent only where a decision genuinely needs one.** Rules become function nodes that run the same way every time. Judgement stays in agent nodes. The wait becomes a node that parks the run instead of sleeping through it.
+
+**Your agent is not replaced by any of this.** It becomes the last node in that
+graph, with every tool, callback and idempotency key intact. The graph decides
+what happens and in what order. Your agent still does the buying.
 
 👉🔴 On the **venue panel**, press **RESET THE VENUE**. Every step starts from
 the same world: 8 shows, all seats available, clock at 1×.
@@ -2113,16 +2152,7 @@ things in it worth reading.
 
 ### The graph
 
-```
-START ─► open_the_night ─► pick_show ─► queue_up ─► check_front ─► brief ─► buyer_agent
-         (fn)               (agent)      (fn)        (fn)           (fn)     (agent)
-          says the           reads        joins       at the         writes   everything
-          sentence a         memory,      once        front?         the      you built,
-          person would       picks a                  no → PAUSE ─┐  prompt   unchanged
-          have said          show                     yes ↓       │
-                                                                  └── every wake-up
-                                                                      re-checks
-```
+![The graph: functions for rules, agents for judgement](img/08-02-workflow.png)
 
 ```python
 # agent/concert/nightly.py
@@ -2211,15 +2241,6 @@ Rules:
 
 ## Working With a Human
 
-
-
-
-> **What this step teaches**
->
-> A conversation is full of numbers that were never a decision. Before you hand
-> an agent your card and go to sleep, it has to say the whole agreement back to
-> you and get a plain yes — and then store it somewhere the conversation cannot
-> reach.
 
 How much of your credit card would you hand this thing while you are gone?
 
@@ -2321,31 +2342,7 @@ nightly = Workflow(
 )
 ```
 
-```
-   START
-     │
-     ▼
-   agree_budget      ← asks, reads back, stores the ask AND the budget  [ NEW ]
-     │
-     ▼
-   open_the_night    ← hands the picker the ask and the budget
-     │
-     ▼
-   pick_show         agent   · judgement
-     │
-     ▼
-   queue_up          function · a rule, and exactly once
-     │
-     ▼
-   check_front  ─────┐  not ready yet
-     │   ▲           │
-     │   └───────────┘  RequestInput, answered by the next wake-up
-     ▼
-   brief             function · what the buyer is allowed to do
-     │
-     ▼
-   buyer_agent       agent   · spends the money
-```
+![The same graph, with agree_budget in front](img/09-02-workflow.png)
 
 **Two nodes stop and wait, and they are the same mechanism.** `check_front` waits for a venue and is answered by a clock. `agree_budget` waits for a person and can only be answered by a person. That difference is the whole of step 10.
 
@@ -2481,16 +2478,7 @@ def agree_budget(node_input, ctx):
 
 ### The graph
 
-```
-START ─► agree_budget ─► open_the_night ─► pick_show ─► queue_up ─► check_front ─► brief ─► buyer_agent
-         (fn)            (fn)              (agent)      (fn)        (fn)           (fn)     (agent)
-          asks, reads     puts the         reads it,    joins       at the         writes   everything
-          back, stores    agreement in     picks        once        front?         the      you built,
-          state["budget"]  the brief        under it                 no → PAUSE     prompt   unchanged
-             │                 ▲
-             └── PAUSE ────────┘
-                 twice
-```
+![The same graph, with agree_budget in front](img/09-02-workflow.png)
 
 It is step 8's graph with one node in front. Nothing else moved.
 
@@ -2532,12 +2520,6 @@ scheduler does not, and the same deployed service handles both.</pre>
 ---
 
 ## The Cloud Stack
-
-> **What this step teaches**
->
-> Your laptop is not a home for an agent. Everything it remembers lives in files
-> that only exist on your machine, and the moment you close the lid, the agent
-> stops. Giving it a permanent address means giving its memory one too.
 
 Your agent survives restarts, re-checks its facts, agrees a budget with a human,
 and runs as a graph. It still only runs while your laptop is awake.
