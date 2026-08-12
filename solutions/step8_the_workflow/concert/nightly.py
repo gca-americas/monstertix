@@ -162,6 +162,11 @@ def queue_up(node_input, ctx: Context) -> Event:
     """
     plan = Plan(**node_input)
     ticket = venue.post("/queue/join", {"event_id": plan.event_id})
+    if "ticket" not in ticket:
+        raise RuntimeError(
+            f"Failed to join queue for event {plan.event_id!r}: {ticket}. "
+            "Please ensure the venue is running and press 'RESET THE VENUE' on the control panel."
+        )
     ctx.state["queue_ticket"] = ticket["ticket"]
     ctx.state["queue_event_id"] = plan.event_id
     print(f"  [queue_up]    {plan.event_id} section {plan.section} — "
