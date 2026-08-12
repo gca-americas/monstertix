@@ -37,6 +37,7 @@ if [ ! -f .env ]; then
   cp .env.example .env
   echo "→ created .env"
 fi
+[ -f .env ] && set -a && . ./.env && set +a
 
 mkdir -p artifacts memory
 # The agent APPENDS to this file every time it calls remember(), so after a few
