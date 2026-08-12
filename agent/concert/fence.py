@@ -85,4 +85,6 @@ def refresh_before_purchase(
 
     # Fresh enough to act on. Hand the live price down to the tool.
     tool_context.state["temp:verified_price"] = current["price"]
+
+
     return None

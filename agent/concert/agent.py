@@ -1,4 +1,4 @@
-"""MODULE 4 — Acting on old news.
+"""MODULE 5 — Agree a budget, then hold the line.
 
 The agent can finally buy. Which is when both failures show up.
 
@@ -28,6 +28,7 @@ from __future__ import annotations
 
 from google.adk.agents import Agent
 from google.adk.apps.app import App, EventsCompactionConfig, ResumabilityConfig
+from google.adk.tools import LongRunningFunctionTool
 from google.adk.tools.agent_tool import AgentTool
 
 from .config import MODEL
@@ -35,7 +36,10 @@ from .fence import refresh_before_purchase
 from .memory import recall, remember
 from .panel import PanelPlugin
 from .tools import (
+    check_queue,
+    set_budget,
     get_seatmap,
+    join_queue,
     note_companion,
     purchase,
     search_events,
@@ -65,28 +69,49 @@ the request.
 )
 
 INSTRUCTION = """
-You help someone buy tickets to see a band on tour.
+You are the last step of a run that started while this person was asleep. A
+graph has already chosen the show, agreed a budget with them, joined the queue
+and waited. You have been woken because you are at the front of it.
 
-Before recommending anything, call recall() to read what you already know about
-this person from past bookings.
+There is NOBODY THERE. Never ask a question — not about the budget, not about
+which section, not to confirm anything. A question here stops the whole run and
+nothing is ever bought.
 
-You do not join queues any more, and you cannot check one. Something else got
-you to the front before it woke you — assume you are at the front and can buy
-right now.
+FIRST, FIND THE BUDGET. It is in the message you were sent, in the person's own
+words, and it was agreed with them before you were called.
 
-Before buying, read the seat map again. Whatever you were told about prices and
-availability was true when the queue started, which may have been forty minutes
-ago.
+If there is no budget in that message, BUY NOTHING. Say what you would have
+bought and what it costs, and ask them to tell you what they are willing to
+spend. An empty budget is not a licence to use your judgement about their money.
 
-When you are woken, do not trust anything you looked up before the wait. Read
-the seat map again, then purchase.
+Once you have it, the largest amount they named anywhere in that sentence is a
+HARD CEILING. Not a guideline, not "about" — you may never buy a seat costing
+more than that number, whatever the reason. If they said "$100 for the cheap
+seats, $200 if they're good ones", then $210 is over the limit and you do not
+buy it. Do the arithmetic explicitly before you call purchase: compare the seat
+price to the number, and if it is higher, pick something cheaper or buy nothing.
 
-If a purchase comes back with reason "stale_plan" or "price_moved", the world
-moved while you were waiting. Re-read the seat map, tell the user what changed,
-and pick again — never retry the same purchase blindly.
+Then do this:
 
-Use note_companion for who is coming. Use remember() for preferences and
-outcomes, never for prices or availability.
+  1. Read the seat map again. The one behind that plan is forty minutes old and
+     the cheap seats go first.
+
+  2. Buy — but check the price against the ceiling first, in that order. If the
+     planned section has gone or is over the limit, take the best remaining one
+     that is genuinely under it. If nothing is under it, buy nothing and say so.
+     Never describe a purchase as "within budget" without having compared the
+     two numbers.
+
+  3. Write one short message they will read over breakfast: what you got, what
+     it cost, and why that seat. Prices are in US dollars. If you bought
+     nothing, say plainly what stopped you.
+
+Use recall() if you need to know what this person is like — it holds what past
+bookings taught you, including who comes with them and what they cannot stand.
+It also tells you how many seats: if the person who normally comes does not do
+weeknights, a weeknight show is one ticket, not two.
+
+Use remember() for the outcome once you are done.
 
 Be concrete and brief.
 """
@@ -103,20 +128,23 @@ buyer_agent = Agent(
         note_companion,
         recall,
         remember,
-            purchase,
+        LongRunningFunctionTool(func=join_queue),
+        check_queue,
+        set_budget,
+        purchase,
         AgentTool(agent=budget_split),
     ],
 )
 
 
-# THE ROOT IS THE GRAPH.
+
+# THE ROOT IS THE GRAPH — and the budget conversation happens inside it.
 #
-# `adk web` looks for `app` first, then `root_agent`. From this module on both
-# point at the workflow, not at the chat agent: the thing you run is the graph.
-# `buyer_agent` above is still every tool and callback you built — it is now one
-# node inside that graph rather than the thing you talk to.
+# Step 8 put the graph in charge because nobody was typing. That did not have to
+# mean nobody CAN type: `agree_budget` stops the run and asks a real person a
+# real question, using the same interrupt that makes the queue wait free.
 #
-# Imported last, because nightly.py imports `buyer_agent` from this file.
+# `buyer_agent` above is unchanged and is still the last node.
 from .nightly import nightly                              # noqa: E402
 
 root_agent = nightly
@@ -124,6 +152,7 @@ root_agent = nightly
 app = App(
     name="concert",
     root_agent=nightly,
+    plugins=[PanelPlugin()],
     events_compaction_config=EventsCompactionConfig(
         compaction_interval=3,
         overlap_size=1,

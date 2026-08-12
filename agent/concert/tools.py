@@ -182,3 +182,25 @@ def purchase(
     if not result.get("error"):
         tool_context.state["last_order"] = result.get("id")
     return result
+
+
+def set_budget(agreed: str, tool_context: ToolContext) -> dict:
+    """Record what this person agreed to spend, in their own words.
+
+    Call this once they have confirmed your summary back. Pass the whole
+    agreement as one sentence, including any conditions they attached — tiers,
+    days, totals, anything. Do not reduce it to a single number.
+
+    Args:
+        agreed: The confirmed budget, e.g. "up to $100 for upper bowl or general
+            admission, up to $250 for lower bowl, and up to $300 on a Saturday".
+
+    Returns:
+        What was stored, and where.
+    """
+    # Session state, NOT user:. A budget is agreed for this booking, not for
+    # every booking this person will ever make. A new session starts with none
+    # and has to agree one — which is the point, because "two-fifty if they're
+    # the good ones" was about that band, that night.
+    tool_context.state["budget"] = agreed
+    return {"budget": agreed, "stored_as": "session state (gone next session)"}

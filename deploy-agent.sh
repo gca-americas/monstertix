@@ -119,13 +119,27 @@ echo "→ iam      $SA_EMAIL may invoke $SERVICE"
 
 # 4. topic → the trigger endpoint. One app, `concert`, whose root_agent IS the
 #    graph — so waking the app runs the graph.
-ENDPOINT="$URL/apps/concert/trigger/pubsub"
-gcloud pubsub subscriptions create "$TOPIC-push" --project "$PROJECT" \
-  --topic="$TOPIC" \
-  --push-endpoint="$ENDPOINT" \
-  --push-auth-service-account="$SA_EMAIL" 2>/dev/null \
-  && echo "→ push     → $ENDPOINT" \
-  || echo "→ push     subscription exists"
+# NOT /apps/concert/trigger/pubsub. ADK's built-in trigger mints a fresh session
+# id and a user id derived from the subscription name, so every fire starts a
+# conversation from nothing — no queue ticket, no budget, no memory of what it
+# was doing. It books a second set of tickets instead of finishing the first.
+# /trigger/wake finds the session that is already parked and answers it.
+ENDPOINT="$URL/trigger/wake"
+if gcloud pubsub subscriptions create "$TOPIC-push" --project "$PROJECT" \
+     --topic="$TOPIC" \
+     --push-endpoint="$ENDPOINT" \
+     --push-auth-service-account="$SA_EMAIL" 2>/dev/null; then
+  echo "→ push     → $ENDPOINT"
+else
+  # It already exists — so UPDATE it. `create` failing quietly used to leave an
+  # old push endpoint in place for ever, which meant a redeploy that changed the
+  # route looked like it worked and silently kept delivering to the old one.
+  gcloud pubsub subscriptions update "$TOPIC-push" --project "$PROJECT" \
+    --push-endpoint="$ENDPOINT" \
+    --push-auth-service-account="$SA_EMAIL" >/dev/null 2>&1 \
+    && echo "→ push     → $ENDPOINT  (updated)" \
+    || echo "→ push     ✗ could not update $TOPIC-push"
+fi
 
 # 5. The alarm clock. This is clock.py from Module 2, run by Google instead of
 #    by your terminal: it has retries, a timezone, and it does not stop when

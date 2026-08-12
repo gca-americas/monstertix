@@ -254,7 +254,7 @@ ask for "memory" without naming `BaseMemoryService` and you will get a dictionar
 **Gets wrong:** Two things get fumbled. Assistants suggest `--session_service_uri=sqlite:///...`, which builds an engine that fails on the first write — ADK drives SQLAlchemy through its **asyncio** extension, so it must be `sqlite+aiosqlite://` with `aiosqlite` and `greenlet` installed. And they will write the poller as a loop *inside the agent*, which is the one arrangement that defeats the point.
 
 
-### Staleness & Idempotency
+### Acting on Stale Data
 
 > Add a `before_tool_callback` that runs before any purchase: re-fetch live
 > inventory, and short-circuit with an explanatory dict if the seats are gone or

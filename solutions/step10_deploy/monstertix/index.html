@@ -243,6 +243,35 @@ function typing() {
   return row;
 }
 
+// ── Watching for work that finishes without you ───────────────────────────
+//
+// A scheduled run completes on the server. Nothing about that reaches this page
+// on its own, so the browser would go on showing a queue position for ever —
+// the tickets bought, and the only person who cared never told.
+//
+// So poll. Every few seconds, ask what has been said in this session since the
+// last time we looked. Cheap, obvious, and it survives the tab being closed and
+// reopened, which a websocket would not.
+let SEEN = Date.now() / 1000;
+
+async function pollForNews() {
+  try {
+    const r = await fetch(`/session/${SESSION}/messages?since=${SEEN}`);
+    if (!r.ok) return;
+    const d = await r.json();
+    if (d.now) SEEN = Math.max(SEEN, d.now);
+    (d.said || []).forEach((line, i) => {
+      const last = i === d.said.length - 1;
+      bubble(line, "agent", last && d.awaiting_input);
+    });
+    if (d.said && d.said.length) {
+      document.getElementById("status").textContent =
+        d.awaiting_input ? "needs your answer" : "agent online";
+    }
+  } catch (e) { /* offline for a moment. Try again on the next tick. */ }
+}
+setInterval(pollForNews, 4000);
+
 async function ask(text) {
   bubble(text, "me");
   const wait = typing();
@@ -297,6 +326,7 @@ const scrim = document.getElementById("scrim");
 document.getElementById("newSession").onclick = async () => {
   const r = await fetch("/session/new", { method: "POST" });
   SESSION = (await r.json()).session_id;
+  SEEN = Date.now() / 1000;
   thread.innerHTML = "";
   bubble("New session. I have forgotten this conversation — including whatever "
        + "budget we agreed — but I still know you from past bookings.", "agent");

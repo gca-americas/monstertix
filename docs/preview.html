@@ -25,9 +25,8 @@
     <google-codelab-step label="Before you begin" duration="0">
 <google-codelab-about codelab-title="Codelab"
                             authors="Workshop"
-                            last-updated="2026-08-12T13:42:05Z"></google-codelab-about>
+                            last-updated="2026-08-12T18:40:27Z"></google-codelab-about>
 <p>Most ticketing sites put buyers in a queue, both to prevent server crashes and to manage high demand. You start your purchase and find yourself behind 14,000 people. The queue moves for forty minutes. When your turn finally comes, you have a short window to pick seats and pay. If you miss that window, your place in line is given away.</p>
-<p>!<a href="img/poster.png" target="_blank">The Midnight Signal, on tour</a></p>
 <p>Many real-world tasks follow this pattern: <strong>a task that takes far longer than a single conversation, running against an external system you do not control.</strong> Examples include waiting for a supplier to restock, waiting for a claim approval, or waiting in a queue.</p>
 <p>Standard AI agents live inside a single chat turn, which lasts seconds and is purely reactive. They cannot wait 40 minutes or act autonomously. To solve this, you need a <strong>long-running agent</strong>: a system that stays dormant during long waits, persists context across process restarts, and resumes automatically when woken by an external trigger.</p>
 <p>This workshop walks you through building a concert ticket queue agent, covering the core architectural patterns required for long-running agents on Google Cloud.</p>
@@ -48,8 +47,9 @@
 <h3 is-upgraded>Get set up</h3>
 <p>First, get your environment ready and make sure you have access to Google Cloud. I recommend running this in Cloud Shell, which already has every tool you need. Just check you have enough space, and that your account can create projects.</p>
 <p>👉💻 Clone the repo and run setup:</p>
-<pre><code class="language-bash">git clone &lt;REPO_URL&gt; ~/longrunningag
-cd ~/longrunningag
+<pre><code class="language-bash">cd ~
+git clone https://github.com/gca-americas/monstertix
+cd ~/monstertix
 ./setup.sh</code></pre>
 <p>It will ask you this once:</p>
 <pre><code>  Which Google Cloud project should this workshop use?
@@ -105,7 +105,7 @@ cd ~/longrunningag
 <p>shell must not win over the value the script sets&lt;/pre&gt;</p>
 </aside>
 <p>👉💻 Activate the environment:</p>
-<pre><code class="language-bash">cd ~/longrunningag
+<pre><code class="language-bash">cd ~/monstertix
 source .venv/bin/activate</code></pre>
 <p>Your prompt now starts with <code>(.venv)</code>.</p>
 <aside class="negative">
@@ -155,10 +155,10 @@ source .venv/bin/activate</code></pre>
 <p>We&#x27;ll start by testing the developer tooling. <strong><code>adk web</code></strong> starts the <strong>ADK web UI</strong>, the development interface that ships with ADK. It lets you talk to the agent you are building without writing a frontend first, and it shows you what a chat window cannot show, such as every tool call and its arguments, the session state as it changes, the artifacts the agent saved, and the raw events underneath. You would not expose it in production. It is the best window into a running agent while you are learning. In step 3 you build the frontend you would actually expose, and in the final step you deploy it.</p>
 <p>👉🔴 On the <strong>venue panel</strong>, press <strong>RESET THE VENUE</strong>. Every step starts from the same world: 8 shows, all seats available, clock at 1×.</p>
 <p>👉💻 <strong>Terminal 1</strong> — load this step&#x27;s code and start the <strong>ADK web UI</strong>:</p>
-<pre><code class="language-bash">cd ~/longrunningag
+<pre><code class="language-bash">cd ~/monstertix
 . ./set_env.sh
 ./use-solution.sh 2 --force
-adk web agent --port 8000</code></pre>
+adk web agent --port 8000 --allow_origins &quot;*&quot;</code></pre>
 <p><code>use-solution.sh</code> copies a step&#x27;s finished code into <code>agent/</code>, which is where you work. Every step starts with it and it prints which files it changed so you know what to read.</p>
 <aside class="negative">
 <b>⚠️ When running use-solution.sh. Stop <code>adk web</code> first.</b> Deleting <code>sessions.db</code> while it is open does not produce an error, the running process just keeps writing to a file that no longer has a name, and the next thing that looks strange costs you an hour. <code>use-solution.sh</code> checks port 8000 and refuses rather than let that happen.
@@ -173,8 +173,8 @@ adk web agent --port 8000</code></pre>
 <tr><td><code>config.py</code></td><td>which model to use, and a check that your credentials work</td></tr>
 </tbody>
 </table>
-<p><code>. ./set_env.sh</code> activates the virtualenv, loads your project and model, and exports <code>$WORKSHOP</code> — the absolute path to <code>~/longrunningag</code>. Run it in <strong>every</strong> terminal you open. It prints what it set:</p>
-<pre><code>  folder   /home/you/longrunningag
+<p><code>. ./set_env.sh</code> activates the virtualenv, loads your project and model, and exports <code>$WORKSHOP</code> — the absolute path to <code>~/monstertix</code>. Run it in <strong>every</strong> terminal you open. It prints what it set:</p>
+<pre><code>  folder   /home/you/monstertix
   project  your project id
   model    gemini-2.5-flash (We&#x27;ll avoid using 3.x for now to avoid high usage demands)
   venue    https://venue-yourname-xxxx.run.app</code></pre>
@@ -234,7 +234,7 @@ root_agent = Agent(
 <p>An ordinary function. No decorator, no registration, no schema to write. ADK reads the signature and the docstring and builds the tool definition the model sees, which is why that docstring is load-bearing, and why deleting one argument changed the model&#x27;s behaviour.</p>
 <p><strong>The model never runs your code.</strong> When you saw <code>search_events({&quot;city&quot;: &quot;Amsterdam&quot;})</code>, the model was <em>asking</em> for that call. ADK ran the function, handed the result back, and the model wrote a sentence about it. The loop is:</p>
 <p>👉 The icons down the far-left edge switch what the panel shows. The second one is the <strong>agent graph</strong> — try it and you should see two tools.:</p>
-<p>TODO: do a screen grab</p>
+<p>!<a href="img/01-02-tool.png" target="_blank">Agent graph showing search_events and get_seatmap tools</a></p>
 <aside class="positive">
 <b>⌨️ Reference Prompt</b> The whole agent, described rather than typed:
 <p>&lt;pre&gt;Write a Google ADK 2 agent package called <code>concert</code>, as four small files.</p>
@@ -263,8 +263,8 @@ root_agent = Agent(
     tools=[search_events, get_seatmap],
 )</code></pre>
 <p>👉💻 In <strong>terminal 1</strong>, restart:</p>
-<pre><code class="language-bash">cd ~/longrunningag
-adk web agent --port 8000</code></pre>
+<pre><code class="language-bash">cd ~/monstertix
+adk web agent --port 8000 --allow_origins &quot;*&quot;</code></pre>
 <p>👉✨ Tell it the plan, exactly as you would tell a person:</p>
 <pre><code>I want to see The Midnight Signal in Amsterdam with Sam. The presale opens at 10:00 on Tuesday. Grab us two tickets the moment it opens.</code></pre>
 <p>It will agree, and it will sound like it means it.</p>
@@ -297,7 +297,8 @@ root_agent = Agent(
 <p>Instead of keeping an agent running non-stop while it waits, a long-running agent should go completely dormant. An external event (such as a timer, a webhook, or a message) wakes the agent up only when there is actual work to do.</p>
 <p>👉🔴 On the <strong>venue panel</strong>, press <strong>RESET THE VENUE</strong>. Every step starts from the same world: 8 shows, all seats available, clock at 1×.</p>
 <p>👉💻 Load this step&#x27;s code:</p>
-<pre><code class="language-bash">cd ~/longrunningag
+<pre><code class="language-bash">cd ~/monstertix
+. ./set_env.sh
 ./use-solution.sh 3 --force</code></pre>
 <p>Notice what that installed: <code>monstertix/</code>, holding the server, the clock, and one more thing you have not seen yet. Check that it left <code>agent/</code> alone, because nothing about the agent changes in this step. Hold onto that, it is the point.</p>
 <table>
@@ -345,7 +346,7 @@ async def wake(payload: dict = Body(default={})):
 <p>The <strong>ADK web UI</strong> has a default one for you. Here you build it yourself, and that is the entire difference between the <strong>ADK web UI</strong> and something you can deploy.</p>
 <p>👉💻 <strong>Terminal 2</strong> — start it:</p>
 <p>Start the Runner,</p>
-<pre><code class="language-bash">cd ~/longrunningag
+<pre><code class="language-bash">cd ~/monstertix
 . ./set_env.sh
 python -m monstertix.server</code></pre>
 <pre><code>[server] agent concert · gemini-x-flash
@@ -417,7 +418,7 @@ while True:
 <p>Dependencies: standard library plus httpx. No agent framework at all.&lt;/pre&gt; &lt;b&gt;Check by hand:&lt;/b&gt; what the prompt does &lt;b&gt;not&lt;/b&gt; mention: agents, ADK, sessions, the venue. If your description of the triggerer has to explain what an agent is, the two halves are not properly separated, and the half you throw away in the cloud will take the other half with it.</p>
 </aside>
 <p>👉💻 <strong>Terminal 3</strong> — fire once, 10 seconds from now:</p>
-<pre><code class="language-bash">cd ~/longrunningag
+<pre><code class="language-bash">cd ~/monstertix
 . ./set_env.sh
 python -m monstertix.clock --in 10</code></pre>
 <pre><code>[clock] target   http://127.0.0.1:8090/wake
@@ -451,7 +452,7 @@ python -m monstertix.clock --in 10</code></pre>
 <blockquote><p><strong>Waking up is the easy half. An agent that wakes with nothing — no history, no preferences, nobody listening — is not yet worth waking.</strong></p></blockquote>
     </google-codelab-step>
     <google-codelab-step label="Managing Context Lifetime" duration="0">
-<h3 is-upgraded>The Problem: Information Lives in Different Places for Different Times</h3>
+<h3 is-upgraded>Information Lives in Different Places for Different Times</h3>
 <p>An agent stores facts in several places: in the chat conversation, in session state, in files (artifacts), or in long-term user memory. Each place lasts for a different amount of time.</p>
 <p>If you put information in the wrong place:</p>
 <ul>
@@ -462,7 +463,8 @@ python -m monstertix.clock --in 10</code></pre>
 <h3 is-upgraded>Load the code</h3>
 <p>👉🔴 On the <strong>venue panel</strong>, press <strong>RESET THE VENUE</strong>.</p>
 <p>👉💻 In the <strong>terminal 1</strong>, run:</p>
-<pre><code class="language-bash">cd ~/longrunningag
+<pre><code class="language-bash">cd ~/monstertix
+. ./set_env.sh
 ./use-solution.sh 4 --force</code></pre>
 <p>What changed since the last step:</p>
 <table>
@@ -474,8 +476,9 @@ python -m monstertix.clock --in 10</code></pre>
 </tbody>
 </table>
 <p>👉💻 Restart the agent in <strong>terminal 1</strong>:</p>
-<pre><code class="language-bash">cd ~/longrunningag
-adk web agent --port 8000 \
+<pre><code class="language-bash">cd ~/monstertix
+. ./set_env.sh
+adk web agent --port 8000 --allow_origins &quot;*&quot; \
   --session_service_uri=&quot;sqlite+aiosqlite:///$WORKSHOP/sessions.db&quot; \
   --artifact_service_uri=&quot;file://$WORKSHOP/artifacts&quot;</code></pre>
 <p>Two flags you have not used before:</p>
@@ -550,7 +553,7 @@ async def get_seatmap(event_id: str, tool_context: ToolContext) -&gt; dict:
 </tbody>
 </table>
 <p>👉💻 Here we chooise files:</p>
-<pre><code class="language-bash">ls -R ~/longrunningag/artifacts</code></pre>
+<pre><code class="language-bash">ls -R ~/monstertix/artifacts</code></pre>
 <p>To move from your laptop to Cloud Storage, change <code>file://</code> to <code>gs://</code>. (We&#x27;ll see this in Step 10)</p>
 <h3 is-upgraded>Our memory store</h3>
 <p>!<a href="img/04-02-contextmgnt.png" target="_blank">Memory as an interface, with a file behind it</a></p>
@@ -609,8 +612,6 @@ memory_service = MarkdownMemoryService(MEMORY_DIR)</code></pre>
 <p>!<a href="img/04-01-newsession1.png" target="_blank">New session, first turn</a></p>
 <pre><code>Show me the seat map for the Amsterdam Saturday show.</code></pre>
 <p>!<a href="img/04-01-newsession2.png" target="_blank">New session, second turn</a></p>
-<pre><code>Show me the seat map for the Amsterdam Saturday show.</code></pre>
-<p>!<a href="img/04-01-newsession2.png" target="_blank">New session, second turn</a></p>
 <pre><code>Actually, hold that thought — what else is on in Amsterdam?</code></pre>
 <p>That third message matters. It ends the turn that read the seat map, and ending a turn is what makes <code>temp:</code> disappear.</p>
 <p>Three things went into storage, in three different places:</p>
@@ -640,7 +641,7 @@ user:prefs        {&quot;excluded_weekdays&quot;: [...]}   ← the person, every
 <p>👉 <strong>Now compare the two State tabs.</strong> While <code>user:prefs</code> and stored artifacts persist, <code>temp:seatmap</code> is absent from both sessions. State keys with a <code>temp:</code> prefix are strictly ephemeral and are never persisted to the database.</p>
 <h3 is-upgraded>Then the file</h3>
 <p>👉💻 Open it in the editor:</p>
-<pre><code class="language-bash">cloudshell edit ~/longrunningag/memory/userx.md</code></pre>
+<pre><code class="language-bash">cloudshell edit ~/monstertix/memory/userx.md</code></pre>
 <p>Three bookings, going back to January. The agent reads it when it calls <code>recall()</code>, and it will still be there even if we lost the session data.</p>
 <h3 is-upgraded>The four places</h3>
 <table>
@@ -670,7 +671,7 @@ user:prefs        {&quot;excluded_weekdays&quot;: [...]}   ← the person, every
 <p>An <strong>invocation</strong> is a single request-response cycle, including all model reasoning, tool execution, and the final response.</p>
 <p>When an invocation ends, ADK writes the new state to the database and strips every <code>temp:</code> key on the way.</p>
 <aside class="positive">
-<b>👀 Developer's Note — you will meet this again in two steps.</b> ADK's own <code>ResumabilityConfig</code> docstring says: <i>"Any temporary / in-memory state will be lost upon resumption."</i> Your agent is about to join a queue, stop running for forty minutes, and get woken up. <code>temp:</code> is the thing that will not survive that.
+<b>👀 Developer's Note — you will meet this again in two steps.</b> ADK's own <code>ResumabilityConfig</code> docstring says: <i>"Any temporary / in-memory state will be lost upon resumption."</i> Your agent is about to join a queue, stop running for forty minutes, and get woken up. <code>temp:</code> will not survive that.
 </aside>
 <aside class="positive">
 <b>⌨️ Reference Prompt</b> Two changes, and the second is a whole interface:
@@ -697,13 +698,14 @@ user:prefs        {&quot;excluded_weekdays&quot;: [...]}   ← the person, every
 <p><strong>Every fact has a shelf life</strong></p>
     </google-codelab-step>
     <google-codelab-step label="Context Degradation &amp; Compaction" duration="0">
-<h3 is-upgraded>The Problem: Summaries Forget the Details</h3>
+<h3 is-upgraded>Summaries Forget the Details</h3>
 <p>When a conversation gets too long, the system summarizes older messages to save space and tokens.</p>
-<p>Summaries are good for catching the general gist, but they drop exact details (such as prices, ticket numbers, or specific user preferences). If you rely only on chat history, those critical details disappear during summarization. You have to save exact facts outside the conversation history.</p>
+<p>Summaries are good for catching the general gist, that are good to save some token usage. &lt;- corret my english</p>
 <p>!<a href="img/05-02-intro.png" target="_blank">Compaction works on the session. Memory is a separate store</a></p>
 <p>👉🔴 On the <strong>venue panel</strong>, press <strong>RESET THE VENUE</strong>. Every step starts from the same world: 8 shows, all seats available, clock at 1×.</p>
 <p>👉💻 Move to this step&#x27;s code:</p>
-<pre><code class="language-bash">cd ~/longrunningag
+<pre><code class="language-bash">cd ~/monstertix
+. ./set_env.sh
 ./use-solution.sh 5 --force</code></pre>
 <p>What changed since the last step:</p>
 <table>
@@ -747,7 +749,8 @@ app = App(
 <p>In <code>sessions.db</code>, in the <strong><code>events</code></strong> table — the same table as every other turn. A compaction record is not a separate store or a separate file. It is one more event row, written by the agent, with a timestamp like any other.</p>
 <p>What makes it different is where the text sits. An ordinary event carries a <code>content</code> field. This one does not: its summary lives under <code>actions.compaction</code>.</p>
 <p>👉💻 Look at it in your own database:</p>
-<pre><code class="language-bash">cd ~/longrunningag
+<pre><code class="language-bash">cd ~/monstertix
+. ./set_env.sh
 sqlite3 sessions.db \
   &quot;select json_extract(event_data,&#x27;\$.actions.compaction.compacted_content.parts[0].text&#x27;)
    from events where event_data like &#x27;%compaction%&#x27;;&quot;</code></pre>
@@ -785,8 +788,8 @@ root_agent = Agent(
 <p><strong>And <code>output_key=&quot;budget_plan&quot;</code></strong> puts the answer into session state under that name instead of leaving it loose in the conversation. Watch why that matters.</p>
 <h3 is-upgraded>Run it</h3>
 <p>👉💻 In <strong>terminal 1</strong>, Ctrl-C and restart with the same flags:</p>
-<pre><code class="language-bash">cd ~/longrunningag
-adk web agent --port 8000 \
+<pre><code class="language-bash">cd ~/monstertix
+adk web agent --port 8000 --allow_origins &quot;*&quot; \
   --session_service_uri=&quot;sqlite+aiosqlite:///$WORKSHOP/sessions.db&quot; \
   --artifact_service_uri=&quot;file://$WORKSHOP/artifacts&quot;</code></pre>
 <p>👉 Start a <strong>New Session</strong> and have a real conversation. Five or six turns. This one works:</p>
@@ -802,11 +805,10 @@ adk web agent --port 8000 \
 <p>👉 Look at <code>budget_plan</code> again. It has been <strong>overwritten</strong>, not appended to. It&#x27;s because <code>output_key</code> holds the latest one.</p>
 <p>!<a href="img/05-01-budget2.png" target="_blank">budget_plan after the second budget question</a></p>
 <h3 is-upgraded>What you cannot see: the summary</h3>
-<p>Somewhere in those turns, ADK summarised the earlier ones. <strong>Do not expect the ADK web UI to show you that</strong>, and understand why.</p>
-<p>A compaction record is an event whose summary lives in <code>actions.compaction</code>, and it carries no message content. The ADK web UI draws events from their content, so a compaction event renders as nothing at all: one of the blank numbered rows in the stream.</p>
-<p>Notice your conversation still shows every turn, because the UI shows what is <em>stored</em>. Keep the two apart: compaction changes what gets <strong>sent to the model</strong> on the next turn. Storage keeps everything. The prompt does not.</p>
+<p>Somewhere in those turns, ADK summarised the earlier ones.</p>
 <p>👉💻 In a new <strong>Terminal</strong>, run to read it directly:</p>
-<pre><code class="language-bash">cd ~/longrunningag
+<pre><code class="language-bash">cd ~/monstertix
+. ./set_env.sh
 ./show-compaction.sh</code></pre>
 <aside class="negative">
 <b>⚠️ Nothing to show?</b> Compaction fires after three turns. If the script says nothing has been compacted yet, keep talking for another few turns and run it again.
@@ -911,7 +913,7 @@ Conversation Language: English
 <blockquote><p><strong>A summary keeps the general shape and loses the details. Store anything you cannot afford to lose somewhere other than the conversation.</strong></p></blockquote>
     </google-codelab-step>
     <google-codelab-step label="Process Resumption" duration="0">
-<h3 is-upgraded>The Problem: Waiting 40 Minutes Without Staying Online</h3>
+<h3 is-upgraded>Waiting 40 Minutes Without Staying Online</h3>
 <p>When an agent has to wait in a 40-minute ticket queue, keeping a Python process alive and waiting is fragile and expensive.</p>
 <p>To handle long waits properly:</p>
 <ol>
@@ -920,7 +922,8 @@ Conversation Language: English
 </ol>
 <p>👉🔴 On the <strong>venue panel</strong>, press <strong>RESET THE VENUE</strong>. Every step starts from the same world: 8 shows, all seats available, clock at 1×.</p>
 <p>👉💻 Move to this step&#x27;s code:</p>
-<pre><code class="language-bash">cd ~/longrunningag
+<pre><code class="language-bash">cd ~/monstertix
+. ./set_env.sh
 ./use-solution.sh 6 --force</code></pre>
 <h3 is-upgraded>Run it</h3>
 <p>What changed since the last step:</p>
@@ -934,8 +937,9 @@ Conversation Language: English
 <p><code>join_queue</code> returns straight away with a ticket instead of blocking, and <code>ResumabilityConfig</code> lets the run pause on it and pick up afterwards.</p>
 <p>!<a href="img/06-02-intro.png" target="_blank">What resumability adds</a></p>
 <p>👉💻 <strong>Terminal 1</strong> — the agent, unchanged:</p>
-<pre><code class="language-bash">cd ~/longrunningag
-adk web agent --port 8000 \
+<pre><code class="language-bash">cd ~/monstertix
+. ./set_env.sh
+adk web agent --port 8000 --allow_origins &quot;*&quot; \
   --session_service_uri=&quot;sqlite+aiosqlite:///$WORKSHOP/sessions.db&quot; \
   --artifact_service_uri=&quot;file://$WORKSHOP/artifacts&quot;</code></pre>
 <p>👉✨ Ask the agent to buy:</p>
@@ -944,7 +948,7 @@ adk web agent --port 8000 \
 <pre><code>You are in the queue for The Midnight Signal at Ziggo Dome, Amsterdam, on Saturday, November 14. Your position is 14203.</code></pre>
 <p>Stop on two things in that answer.</p>
 <p>Notice it picked <strong>Saturday</strong> without asking you. There are two Amsterdam shows, the 17th is a Tuesday, and the memory file from the last step says Sam does not do weeknights. That is a fact from a previous booking deciding a question in this one.</p>
-<p>Notice too that it joined the queue <strong>before</strong> looking at a single seat or price, and said nothing about either. That is the venue&#x27;s rule, and a real one: nobody can buy until they reach the front, so the only thing worth having early is a place in line. Which seats to take is a question for forty minutes from now.</p>
+<p>Notice too that it joined the queue <strong>before</strong> looking at a single seat or price, and said nothing about either. That is the venue&#x27;s rule, you buy the tickets until they reach the front, so the only thing worth having early is a place in line. Which seats to take is a question for forty minutes from now.</p>
 <p>👉 Look at the control panel. The banner reads:</p>
 <p>!<a href="img/06-01-resume1.png" target="_blank">The queue, still moving while nothing of yours runs</a></p>
 <pre><code>Agent is waiting in line — #14,203
@@ -956,8 +960,9 @@ About 2400s at 1×. Safe to kill the agent right now — it will still be here.<
 <p>👉💻 <strong>Kill the agent.</strong>:</p>
 <pre><code>Ctrl-C</code></pre>
 <p>👉💻 Start it again in <strong>terminal 1</strong>:</p>
-<pre><code class="language-bash">cd ~/longrunningag
-adk web agent --port 8000 \
+<pre><code class="language-bash">cd ~/monstertix
+. ./set_env.sh
+adk web agent --port 8000 --allow_origins &quot;*&quot; \
   --session_service_uri=&quot;sqlite+aiosqlite:///$WORKSHOP/sessions.db&quot; \
   --artifact_service_uri=&quot;file://$WORKSHOP/artifacts&quot;</code></pre>
 <p>👉✨ In the same session, ask the agent where it is in line:</p>
@@ -966,7 +971,7 @@ adk web agent --port 8000 \
 <p>!<a href="img/06-01-resume2.png" target="_blank">The same ticket, after the restart</a></p>
 <p><strong>Compare the ticket, and watch the position keep dropping while nothing was running.</strong> Notice the agent did not know it had been killed. It called <code>check_queue</code> with the ticket it got before the restart, because that ticket was on disk.</p>
 <p>👉💻 See why:</p>
-<pre><code class="language-bash">cd ~/longrunningag
+<pre><code class="language-bash">cd ~/monstertix
 sqlite3 sessions.db &quot;select name from pragma_table_info(&#x27;events&#x27;);&quot;</code></pre>
 <pre><code>id
 app_name
@@ -1051,18 +1056,15 @@ ResumabilityConfig(is_resumable=True)         # the run may pause and be picked 
 </aside>
 <blockquote><p><strong>The agent was not running for those forty minutes. Something outside it noticed the wait was over and started it again.</strong></p></blockquote>
     </google-codelab-step>
-    <google-codelab-step label="Staleness &amp; Idempotency" duration="0">
-<h3 is-upgraded>The Problem: Old Information and Double Purchases</h3>
-<p>Long-running agents store history and past turns. But because time passes while the agent waits, the world changes outside it. This causes two big issues:</p>
-<ol>
-<li><strong>Stale Data</strong>: Facts from earlier in the chat (like seat availability or prices) go out of date. Instead of realizing its information is old, the agent acts with confidence on stale numbers.</li>
-<li><strong>Duplicate Actions</strong>: If a process crashes or retries a payment, it might buy tickets twice unless the operation is safe to run multiple times (idempotent).</li>
-</ol>
-<p>For long-running agents, timing matters: re-check dynamic facts immediately before acting, and make sure financial actions are safe to retry.</p>
+    <google-codelab-step label="Acting on Stale Data" duration="0">
+<h3 is-upgraded>Information goes out of date while you wait</h3>
+<p>Long-running agents store history, and history is not the same as truth. Time passes while the agent waits, and the world moves on without telling it.</p>
+<p>An agent that is <em>missing</em> information asks you for it. An agent holding <em>out-of-date</em> information just acts, and sounds completely certain doing it. Nothing is missing from its context — the wrong thing is present.</p>
+<p>So some facts have to be read again in the instant before they are used, and this step is about which ones and how.</p>
 <p><strong>Do not load new code yet.</strong> Stay on the previous step&#x27;s agent (it can buy tickets, but currently has no safeguards for staleness or idempotency).</p>
 <p>👉🔴 Press <strong>RESET THE VENUE</strong>, then start a <strong>new session</strong> in <code>adk web</code> — the <strong>+ New Session</strong> button above the chat.</p>
-<p>Clear out the queue ticket and half-finished purchase the last step left in your old session. Both demos below depend on watching one clean run, so start from nothing.</p>
-<h3 is-upgraded>Bug one: the snapshot lies</h3>
+<p>Clear out the queue ticket and half-finished purchase the last step left in your old session. The demo below depends on watching one clean run, so start from nothing.</p>
+<h3 is-upgraded>The snapshot lies</h3>
 <p>👉✨ Ask for the same show as before:</p>
 <pre><code>Get us two tickets to the Amsterdam show.</code></pre>
 <p>👉✨ Now, while it waits in line, ask about seats:</p>
@@ -1085,42 +1087,16 @@ updated seat map to see what&#x27;s still available.</code></pre>
 <p>Notice the agent only re-queried the seat map <strong>after</strong> receiving an API error response. The root cause is stale context: earlier in the session, the agent recorded &quot;section A: 400 available&quot;, and that turn remained in the conversation history passed to the model.</p>
 <p>Be clear about where the old information is stored: it persists in the <strong>conversation history</strong>, which state prefixes like <code>temp:</code> cannot override.</p>
 <p>!<a href="img/07-02-bug1.png" target="_blank">The seat map the agent is still working from</a></p>
-<h3 is-upgraded>Bug two: bought twice</h3>
-<p>👉🔴 Press <strong>RESET THE VENUE</strong>, then <strong>BREAK THE NEXT PURCHASE</strong>.</p>
-<p>!<a href="img/07-01-bug3.png" target="_blank">The next purchase armed to commit, then fail</a></p>
-<p>👉✨ Start another <strong>new session</strong> and run it again — same show, same steps:</p>
-<pre><code>Get us two tickets to the Amsterdam show.</code></pre>
-<p>As before, this only gets you a place in line. Nothing has been bought and nothing can fail yet: the agent is 14,203rd, and the venue rejects any purchase from someone who is not at the front.</p>
-<p>👉🔴 Press <strong>SKIP THE WAIT</strong>. The panel banner should now read <em>Agent is at the front of the queue</em>.</p>
-<p>👉✨ Now buy:</p>
-<pre><code>Buy two seats in section A.</code></pre>
-<p>The purchase fails:</p>
-<pre><code>{&quot;error&quot;: &quot;upstream_timeout&quot;, &quot;status&quot;: 503, &quot;message&quot;: &quot;try again&quot;}</code></pre>
-<pre><code>It looks like there was a problem processing the purchase and it timed out.
-Please try again.</code></pre>
-<p>👉 Look at the venue panel <strong>before proceeding</strong>. The panel shows <strong>one order</strong>.</p>
-<p>!<a href="img/07-01-bug4.png" target="_blank">One order recorded on the venue panel despite the timeout response</a></p>
-<p>The purchase transaction succeeded on the backend, but the response timed out before returning to the client. From the client&#x27;s perspective, an unacknowledged timeout is indistinguishable from a failed request.</p>
-<p>👉✨ Send a retry message:</p>
-<pre><code>Yes, try again.</code></pre>
-<pre><code>Great news! Your purchase for two seats in Section A for the Amsterdam show
-on November 14th was successful. The total cost is $420.</code></pre>
-<p>!<a href="img/07-01-bug5.png" target="_blank">The agent reports success after retrying</a></p>
-<p>👉 The venue panel now displays:</p>
-<pre><code>Bought 2 times
-The retry went through again. This is the bug an idempotency key fixes.</code></pre>
-<p>!<a href="img/07-01-bug6.png" target="_blank">Two orders for one booking</a></p>
-<p>Retrying non-idempotent operations without an idempotency key creates duplicate transactions. Sending an idempotency key allows the venue API to detect duplicate requests and return the original order.</p>
-<p><strong>Assume the venue cannot tell any of them apart.</strong> So fix it with a key the venue recognises, not a setting on your side.</p>
-<p>!<a href="img/07-02-bug2.png" target="_blank">Committed, then the response failed</a></p>
-<h3 is-upgraded>Now fix both</h3>
+<h3 is-upgraded>The fix</h3>
 <p>👉🔴 On the <strong>venue panel</strong>, press <strong>RESET THE VENUE</strong>. Every step starts from the same world: 8 shows, all seats available, clock at 1×.</p>
 <p>👉💻 <em>Now</em> load this step&#x27;s code:</p>
-<pre><code class="language-bash">cd ~/longrunningag
+<pre><code class="language-bash">cd ~/monstertix
+. ./set_env.sh
 ./use-solution.sh 7 --force</code></pre>
 <p>👉💻 In <strong>terminal 1</strong>, Ctrl-C and restart:</p>
-<pre><code class="language-bash">cd ~/longrunningag
-adk web agent --port 8000 \
+<pre><code class="language-bash">cd ~/monstertix
+. ./set_env.sh
+adk web agent --port 8000 --allow_origins &quot;*&quot; \
   --session_service_uri=&quot;sqlite+aiosqlite:///$WORKSHOP/sessions.db&quot; \
   --artifact_service_uri=&quot;file://$WORKSHOP/artifacts&quot;</code></pre>
 <p>What changed:</p>
@@ -1137,14 +1113,18 @@ adk web agent --port 8000 \
     ...,
     before_tool_callback=refresh_before_purchase,   # re-read inventory, then decide
 )</code></pre>
-<p>Derive the key from the request itself, so a retry of the <em>same</em> purchase produces the <em>same</em> key:</p>
+<p>The second change is for a failure you have not seen yet, and will.</p>
+<p><strong>Something you did not write is going to retry your purchase.</strong> The order commits, the response dies on the way back, and from where the agent stands a successful purchase and a failed one look identical. So it tries again. In the final step ADK&#x27;s own Pub/Sub trigger does this for you (<code>ADK_TRIGGER_MAX_RETRIES</code>, default 3); elsewhere it is a load balancer, a queue, or a person clicking twice. ADK&#x27;s <code>ResumabilityConfig</code> docstring says it plainly:</p>
+<blockquote><p><em>&quot;Tool call to resume needs to be idempotent because we only guarantee an at-least-once behavior once resumed.&quot;</em></p></blockquote>
+<p><strong>At-least-once means more than once, sometimes.</strong> You cannot stop the retry, so the venue has to be able to recognise it — and that means the second attempt has to arrive carrying something the first one had.</p>
+<p>Derive that key from the request itself, so a retry of the <em>same</em> purchase produces the <em>same</em> key, while a genuinely different purchase produces a different one:</p>
 <pre><code class="language-python"># agent/concert/tools.py
 key = hashlib.sha256(
     f&quot;{tool_context.session.id}:{event_id}:{section}:{seats}&quot;.encode()
 ).hexdigest()[:24]
 
 venue.post(&quot;/purchase&quot;, body, headers={&quot;Idempotency-Key&quot;: key})</code></pre>
-<h3 is-upgraded>Prove both are fixed</h3>
+<h3 is-upgraded>Prove it</h3>
 <p>👉🔴 <strong>RESET THE VENUE</strong>. Queue up, press <strong>SELL THE GOOD SEATS</strong> mid-wait, then tell it to buy section A.</p>
 <p>This time it stops itself. Watch the agent say something like:</p>
 <blockquote><p><em>&quot;It looks like Section A just sold out. I need to re-read the seat map.&quot;</em></p></blockquote>
@@ -1156,9 +1136,10 @@ agent  calling purchase</code></pre>
 <p>!<a href="img/07-01-solution1.png" target="_blank">The venue feed: the attempt, and the refusal</a></p>
 <p><strong><code>calling purchase</code> is there, and no order was created.</strong> Those two are not in conflict. <code>panel.py</code> reports every tool call to the feed so you can watch the agent work, so the attempt is logged. <code>fence.py</code> runs after it, re-reads the seat map, and returns a dict — and returning a dict short-circuits the tool. So <code>purchase</code> in <code>tools.py</code> never runs, the venue&#x27;s <code>/purchase</code> endpoint is never called, and <strong>Tickets bought does not move.</strong></p>
 <p>That is the shape of the fix worth remembering. The agent still tried, and nothing stopped it from wanting to. The callback stopped the wanting from reaching the world, which is what an instruction could never do.</p>
-<p>👉🔴 <strong>RESET</strong>, then <strong>BREAK THE NEXT PURCHASE</strong>, and buy. Retry as many times as you like.</p>
+<p>👉🔴 Now prove the key works. Press <strong>RESET THE VENUE</strong>, then <strong>BREAK THE NEXT PURCHASE</strong> — that button makes the venue commit an order and then fail the response, which is exactly the situation a retry is born from.</p>
+<p>👉✨ Ask it to buy, and let it retry as many times as it likes.</p>
 <p>!<a href="img/07-01-solution2.png" target="_blank">Still one order, however many times you retry</a></p>
-<p>Check the order count. It stays at <strong>1</strong>.</p>
+<p><strong>Check the order count. It stays at 1.</strong> The venue saw the same key twice and handed back the original order instead of writing a second one. Without the key you would be holding two pairs of tickets and an agent quite certain it bought one.</p>
 <aside class="positive">
 <b>👀 Developer's Note:</b> ADK 2 also ships <code>runner.rewind_async(rewind_before_invocation_id=...)</code> to roll state back to before a bad decision.
 </aside>
@@ -1188,7 +1169,7 @@ agent  calling purchase</code></pre>
 <blockquote><p><strong>Information goes out of date. For an agent that waits, when it read something matters as much as what it read.</strong></p></blockquote>
     </google-codelab-step>
     <google-codelab-step label="Autonomous Workflow" duration="0">
-<h3 is-upgraded>The Problem: LLMs Are Bad at Following Rigid Rules Every Single Time</h3>
+<h3 is-upgraded>LLMs Are Bad at Following Rigid Rules Every Single Time</h3>
 <p>LLMs are great at making decisions (like picking a show based on user preferences). But relying on an LLM to follow strict step-by-step rules (like &quot;always join the queue before checking seats&quot;) means it will occasionally skip steps or mess up the order.</p>
 <p>To fix this, split the workflow into two types of steps:</p>
 <ul>
@@ -1211,12 +1192,14 @@ agent  calling purchase</code></pre>
 <p><strong>Your agent is not replaced by any of this.</strong> It becomes the last node in that graph, with every tool, callback and idempotency key intact. The graph decides what happens and in what order. Your agent still does the buying.</p>
 <p>👉🔴 On the <strong>venue panel</strong>, press <strong>RESET THE VENUE</strong>. Every step starts from the same world: 8 shows, all seats available, clock at 1×.</p>
 <p>👉💻 Move to this step&#x27;s code:</p>
-<pre><code class="language-bash">cd ~/longrunningag
+<pre><code class="language-bash">cd ~/monstertix
+. ./set_env.sh
 ./use-solution.sh 8 --force</code></pre>
 <h3 is-upgraded>Run it</h3>
 <p>👉💻 In <strong>terminal 1</strong>, Ctrl-C and restart. Same command as always:</p>
-<pre><code class="language-bash">cd ~/longrunningag
-adk web agent --port 8000 \
+<pre><code class="language-bash">cd ~/monstertix
+. ./set_env.sh
+adk web agent --port 8000 --allow_origins &quot;*&quot; \
   --session_service_uri=&quot;sqlite+aiosqlite:///$WORKSHOP/sessions.db&quot; \
   --artifact_service_uri=&quot;file://$WORKSHOP/artifacts&quot;</code></pre>
 <p>What changed since the last step:</p>
@@ -1344,17 +1327,19 @@ if not status[&quot;ready&quot;]:
 <blockquote><p><strong>The run costs nothing while it waits, and it ends in exactly one place: tickets bought. It just might take all night and several wake-ups to get there.</strong></p></blockquote>
     </google-codelab-step>
     <google-codelab-step label="Working With a Human" duration="0">
-<h3 is-upgraded>The Problem: Don&#x27;t Spend Money Without Double-Checking with a Person</h3>
+<h3 is-upgraded>Don&#x27;t Spend Money Without Double-Checking with a Person</h3>
 <p>An autonomous agent running overnight shouldn&#x27;t make expensive financial choices based on guessed or ambiguous preferences from chat history.</p>
 <p>Before executing high-stakes actions (like spending money on tickets), the agent must pause, ask the user to confirm their budget out loud, and save that explicit confirmation before making any purchases.</p>
 <p>👉🔴 On the <strong>venue panel</strong>, press <strong>RESET THE VENUE</strong>. Every step starts from the same world: 8 shows, all seats available, clock at 1×.</p>
 <p>👉💻 Move to this step&#x27;s code:</p>
-<pre><code class="language-bash">cd ~/longrunningag
+<pre><code class="language-bash">cd ~/monstertix
+. ./set_env.sh
 ./use-solution.sh 9 --force</code></pre>
 <h3 is-upgraded>Run it</h3>
 <p>👉💻 In <strong>terminal 1</strong>, Ctrl-C and restart. Same command as before:</p>
-<pre><code class="language-bash">cd ~/longrunningag
-adk web agent --port 8000 \
+<pre><code class="language-bash">cd ~/monstertix
+. ./set_env.sh
+adk web agent --port 8000 --allow_origins &quot;*&quot; \
   --session_service_uri=&quot;sqlite+aiosqlite:///$WORKSHOP/sessions.db&quot; \
   --artifact_service_uri=&quot;file://$WORKSHOP/artifacts&quot;</code></pre>
 <p>What changed since the last step:</p>
@@ -1500,7 +1485,7 @@ def agree_budget(node_input, ctx):
 <blockquote><p><strong>The agreement came from the person, they confirmed it out loud, and it dies with the conversation it was agreed in. A limit that outlives the reason for it is not a limit any more — it is a default nobody remembers choosing.</strong></p></blockquote>
     </google-codelab-step>
     <google-codelab-step label="The Cloud Stack" duration="0">
-<h3 is-upgraded>The Problem: Laptops Sleep and Local Files Disappear</h3>
+<h3 is-upgraded>Laptops Sleep and Local Files Disappear</h3>
 <p>On your laptop, an agent depends on your computer staying awake, local SQLite databases, and local files. If you close your laptop lid or deploy to a cloud container that restarts, local files and memory disappear.</p>
 <p>To run reliably in production:</p>
 <ol>
@@ -1510,7 +1495,8 @@ def agree_budget(node_input, ctx):
 </ol>
 <p>👉🔴 On the <strong>venue panel</strong>, press <strong>RESET THE VENUE</strong>. Every step starts from the same world: 8 shows, all seats available, clock at 1×.</p>
 <p>👉💻 Move to the final code:</p>
-<pre><code class="language-bash">cd ~/longrunningag
+<pre><code class="language-bash">cd ~/monstertix
+. ./set_env.sh
 ./use-solution.sh 10 --force</code></pre>
 <table>
 <thead><tr><th>File</th><th>What changed</th></tr></thead>
@@ -1531,12 +1517,13 @@ def agree_budget(node_input, ctx):
 <h3 is-upgraded>Test it locally first</h3>
 <p>Do this before touching Google Cloud. <code>main.py</code> is the same app the container will run, so run it on your laptop and be sure before you spend three minutes on a build.</p>
 <p>👉💻 <strong>Terminal 2:</strong></p>
-<pre><code class="language-bash">cd ~/longrunningag/agent
+<pre><code class="language-bash">cd ~/monstertix/agent
+. ../set_env.sh
 uvicorn main:app --port 8092</code></pre>
 <p>👉 Open <strong>http://127.0.0.1:8092</strong> and book something. Same MonsterTix, same agent, same venue — served by the production entrypoint this time.</p>
 <p>👉💻 And check the endpoint a scheduler would call actually exists:</p>
-<pre><code class="language-bash">curl -s localhost:8092/openapi.json | grep -o &#x27;/apps/{app_name}/trigger/pubsub&#x27;</code></pre>
-<pre><code>/apps/{app_name}/trigger/pubsub</code></pre>
+<pre><code class="language-bash">curl -s localhost:8092/openapi.json | grep -o &#x27;/trigger/wake&#x27;</code></pre>
+<pre><code>/trigger/wake</code></pre>
 <p>One app, two doors:</p>
 <pre><code>   ┌─ one service ────────────────────────────────────────────┐
    │  /                        the page, for a person          │
@@ -1573,7 +1560,7 @@ artifacts/           seat maps written to a folder</code></pre>
 <h3 is-upgraded>Create them</h3>
 <p>Provision a PostgreSQL database, database user, and Cloud Storage bucket. Note that Cloud SQL instance creation takes several minutes and was initiated in the background during <code>setup.sh</code>.</p>
 <p>👉💻 Collect it, and make the rest:</p>
-<pre><code class="language-bash">cd ~/longrunningag
+<pre><code class="language-bash">cd ~/monstertix
 ./setup-cloud-state.sh</code></pre>
 <pre><code>→ instance  RUNNABLE
 → database  adk created
@@ -1596,14 +1583,18 @@ CLOUD_ARTIFACT_SERVICE_URI=gs://your-project-agent-you/artifacts</code></pre>
 <h3 is-upgraded>Now deploy, and give it an alarm clock</h3>
 <p>With the services ready, give the agent its permanent home.</p>
 <p>👉💻 Three or four minutes. Start it and read on:</p>
-<pre><code class="language-bash">cd ~/longrunningag
+<pre><code class="language-bash">cd ~/monstertix
 ./deploy-agent.sh</code></pre>
 <p>That builds <code>agent/</code> into a container, pushes it to Cloud Run, and then wires up three more things. Know what each is for, because &quot;deploy the agent&quot; is only the first of five steps:</p>
 <pre><code>1. gcloud run deploy       the container: your agent, the graph, and the page
 2. a Pub/Sub topic         a queue for messages
 3. a service account       an identity, so the message is allowed in
-4. a push subscription     topic ──► /apps/concert/trigger/pubsub
+4. a push subscription     topic ──► /trigger/wake
 5. a Cloud Scheduler job   the alarm clock, on a cron</code></pre>
+<aside class="negative">
+<b>⚠️ ADK ships a trigger endpoint, and this workshop deliberately does not use it.</b> <code>trigger_sources=["pubsub"]</code> mounts <code>/apps/&lt;app&gt;/trigger/pubsub</code>, and its source says exactly what it does with a message:
+<p>&lt;pre&gt;session_id = str(uuid.uuid4())               # a brand new session user_id    = subscription.replace(&quot;/&quot;, &quot;--&quot;)  # and a different user&lt;/pre&gt; That is right for &lt;i&gt;&quot;fire an agent at something&quot;&lt;/i&gt;, where each message is independent work. It is wrong for &lt;i&gt;&quot;go and finish the thing you started&quot;&lt;/i&gt;. A fresh session has no queue ticket, no agreed budget and no memory of the conversation, so the 3am run would not resume your booking — &lt;b&gt;it would start a second one and buy another pair of tickets.&lt;/b&gt; &lt;br&gt;&lt;br&gt; So &lt;code&gt;main.py&lt;/code&gt; adds &lt;code&gt;/trigger/wake&lt;/code&gt;, which lists the sessions for this user, finds the one that is parked on a question, and answers &lt;i&gt;that&lt;/i&gt;. The scheduler pushes there instead. Same Pub/Sub, same retries, same timezone — a different idea about which conversation it belongs to.</p>
+</aside>
 <p><strong>Why a scheduler.</strong> Go back to <code>clock.py</code> in step 3: sleep, then POST. It worked, and it dies with your terminal. Cloud Scheduler is the same idea run by Google: it fires on a cron, retries if the call fails, understands timezones, and does not care whether your laptop is open. It is the trigger you already built, living somewhere permanent.</p>
 <p><strong>Why Pub/Sub in the middle.</strong> Cloud Scheduler could call your service directly, so the topic looks like an extra step. It buys you three things:</p>
 <pre><code>   Cloud Scheduler ──► Pub/Sub topic ──► push subscription ──► your agent
@@ -1615,12 +1606,12 @@ CLOUD_ARTIFACT_SERVICE_URI=gs://your-project-agent-you/artifacts</code></pre>
 <pre><code>→ agent    https://concert-you-xxxx.run.app
 → topic    presale-you created
 → iam      concert-trigger@your-project… may invoke concert-you
-→ push     → https://concert-you-xxxx.run.app/apps/concert/trigger/pubsub
+→ push     → https://concert-you-xxxx.run.app/trigger/wake
 → schedule 0 3 * * *</code></pre>
 <aside class="positive">
 <b>👀 Developer's Note — asking for this instead.</b> With the Google Cloud MCP server connected, the five steps above are one request:
 <br><br>
-<p>&lt;i&gt;&quot;Deploy the folder &lt;code&gt;agent/&lt;/code&gt; to Cloud Run in project &lt;code&gt;&amp;lt;my-project&amp;gt;&lt;/code&gt; as &lt;code&gt;concert-me&lt;/code&gt;, unauthenticated, with these environment variables: … Then create a Pub/Sub topic &lt;code&gt;presale-me&lt;/code&gt;, a service account that may invoke the service, a push subscription from the topic to &lt;code&gt;&amp;lt;service-url&amp;gt;/apps/concert/trigger/pubsub&lt;/code&gt;, and a Cloud Scheduler job firing the topic at 03:00 UTC daily.&quot;&lt;/i&gt; &lt;br&gt;&lt;br&gt; Read the plan before approving. The point of naming all five resources is that you can tell when one is missing.</p>
+<p>&lt;i&gt;&quot;Deploy the folder &lt;code&gt;agent/&lt;/code&gt; to Cloud Run in project &lt;code&gt;&amp;lt;my-project&amp;gt;&lt;/code&gt; as &lt;code&gt;concert-me&lt;/code&gt;, unauthenticated, with these environment variables: … Then create a Pub/Sub topic &lt;code&gt;presale-me&lt;/code&gt;, a service account that may invoke the service, a push subscription from the topic to &lt;code&gt;&amp;lt;service-url&amp;gt;/trigger/wake&lt;/code&gt;, and a Cloud Scheduler job firing the topic at 03:00 UTC daily.&quot;&lt;/i&gt; &lt;br&gt;&lt;br&gt; Read the plan before approving. The point of naming all five resources is that you can tell when one is missing.</p>
 </aside>
 <aside class="negative">
 <b>⚠️ Trigger endpoints need Cloud Run or GKE.</b> Agent Runtime does not support scheduled or event-driven triggers, so this is not a choice between deployment targets.
@@ -1639,7 +1630,7 @@ I don&#x27;t want the cheap ones.</code></pre>
 <pre><code>  ONE deployed service, TWO kinds of caller
 
   your browser  ──► /wake                        somebody is plainly here
-  Cloud Sched.  ──► /apps/concert/trigger/pubsub nobody is</code></pre>
+  Cloud Sched.  ──► /trigger/wake                nobody is</code></pre>
 <p>Notice both arrive at the same process. Ask a variable read once at boot to tell them apart and it cannot, so setting it silences the question for the browser too. Now you have an agent that spends a number you never agreed to, which is the one thing the whole of Module 5 exists to prevent.</p>
 <p><strong>&quot;Is a person here?&quot; is a fact about a request, not about a process.</strong> So the variable is only the <em>default</em>, unattended, the safe assumption for anything a scheduler can reach, and the <code>/wake</code> route, which only ever runs because somebody typed, overrides it for the length of that one request:</p>
 <pre><code class="language-python"># concert/budget.py
@@ -1664,15 +1655,30 @@ def someone_is_there():
 <pre><code>You&#x27;re at the front of the queue now.</code></pre>
 <p>👉 Watch the panel while it buys. One order, in a database on the other side of the world, placed by a container you never logged into.</p>
 <h3 is-upgraded>Fire it the way 3am will</h3>
-<p>👉🔴 Press <strong>RESET THE VENUE</strong> first, so the next order is unambiguous.</p>
-<p>👉💻 Publish a message by hand, exactly as the scheduler will at 03:00:</p>
-<pre><code class="language-bash">gcloud scheduler jobs run presale-$(gcloud config get-value account | cut -d@ -f1) \
+<p>The run is parked in the queue right now, which is exactly the state 3am finds it in. So be 3am.</p>
+<p>👉🔴 Press <strong>SKIP THE WAIT</strong> on the venue panel, so the queue is ready when the message arrives.</p>
+<p>👉💻 Publish to the topic, which is precisely what Cloud Scheduler does:</p>
+<pre><code class="language-bash">gcloud pubsub topics publish presale-$(gcloud config get-value account | cut -d@ -f1) \
+  --message=&#x27;The presale just opened.&#x27;</code></pre>
+<p>👉 <strong>Now watch the browser, and do not touch it.</strong> Within a few seconds the agent&#x27;s reply appears on its own: it bought the tickets, at a price inside what you agreed, and told you so.</p>
+<p>Nobody typed. Scheduler published, Pub/Sub delivered, your endpoint found the session that was waiting, and the run finished.</p>
+<p>👉🔴 Check the venue panel. <strong>One order, not two.</strong></p>
+<aside class="positive">
+<b>👀 Developer's Note — why the page noticed.</b> A scheduled run finishes on the server, and nothing about that reaches an open browser on its own. So MonsterTix polls <code>/session/&lt;id&gt;/messages?since=&lt;timestamp&gt;</code> every four seconds and prints whatever is new. Unglamorous, and it survives the tab being closed overnight and reopened in the morning — which is the actual use case, and something a websocket would not have survived.
+</aside>
+<aside class="negative">
+<b>⚠️ If it books a second pair of tickets, check where your subscription is pushing.</b>
+<p>&lt;pre&gt;gcloud pubsub subscriptions describe &amp;lt;topic&amp;gt;-push \ --format=&#x27;value(pushConfig.pushEndpoint)&#x27;&lt;/pre&gt; It must end in &lt;code&gt;/trigger/wake&lt;/code&gt;. If it ends in &lt;code&gt;/apps/concert/trigger/pubsub&lt;/code&gt; you are on ADK&#x27;s built-in trigger, which starts a brand new session every fire — so it does not resume your booking, it starts another one. &lt;code&gt;deploy-agent.sh&lt;/code&gt; updates an existing subscription, but a subscription created by hand earlier will keep whatever endpoint it was born with.</p>
+</aside>
+<p><strong>To run it on a real schedule</strong>, the job has to be enabled — <code>jobs run</code> refuses on a paused one with <code>Job.state must be ENABLED</code>:</p>
+<pre><code class="language-bash">gcloud scheduler jobs resume presale-$(gcloud config get-value account | cut -d@ -f1) \
   --location=us-central1</code></pre>
-<p>👉🔴 Watch the venue panel and press <strong>SKIP THE WAIT</strong> when a queue ticket appears.</p>
-<p>Watch the graph park at <code>check_front</code>, the same as on your laptop. Let the next scheduled fire wake it, and for a demo make the schedule impatient:</p>
+<p>And for a demo, make it impatient:</p>
 <pre><code class="language-bash">gcloud scheduler jobs update pubsub presale-$(gcloud config get-value account | cut -d@ -f1) \
   --location=us-central1 --schedule=&quot;*/5 * * * *&quot;</code></pre>
-<p><strong>Check that nobody typed anything.</strong> Scheduler published, Pub/Sub delivered, ADK routed it to the graph, and it ran.</p>
+<aside class="negative">
+<b>⚠️ Pause it again when you are done.</b> An enabled job fires against your venue every night, or every five minutes if you set the impatient schedule above. <code>gcloud scheduler jobs pause &lt;job&gt; --location=us-central1</code>.
+</aside>
 <h3 is-upgraded>Check the state is really durable</h3>
 <p>Do this part. It is the claim the whole step rests on.</p>
 <p>👉💻 Your 3am run, as rows in a database that is not on your laptop:</p>
@@ -1711,28 +1717,6 @@ select count(*) from events;</code></pre>
 </tbody>
 </table>
 <p><strong>Check your <code>root_agent</code>, its tools, its callbacks and the budget, and find them unchanged.</strong> Diff <code>solutions/step10_deploy/concert/</code> against the folder you finished step 9 with and see it byte for byte. That is the argument for ADK&#x27;s service abstraction, and it is the last thing worth remembering.</p>
-<h3 is-upgraded>Everything you just learned, in one place</h3>
-<p>Count ten steps, each adding exactly one idea. If you remember nothing else, remember which problem each of these solves.</p>
-<table>
-<thead><tr><th>The idea</th><th>The problem it solves</th></tr></thead>
-<tbody>
-<tr><td><strong>An instruction is not autonomy</strong></td><td>A prompt is text handed to a model when something calls the agent. It can never be the thing that does the calling.</td></tr>
-<tr><td><strong>A trigger and a triggerer</strong></td><td>An endpoint with a Runner behind it, and something separate that knows the time. Keep them apart and only the second one changes when you deploy.</td></tr>
-<tr><td><strong>A frontend that is not a dev tool</strong></td><td><code>adk web</code> is for looking inside a run. It does not survive leaving your laptop, and it is not what you hand to a person.</td></tr>
-<tr><td><strong>Four places a fact can live</strong></td><td><code>temp:</code> is gone before it is written. Session state is this conversation. <code>user:</code> is this person. A memory file is everything you have ever learned. Choosing wrongly is how facts get lost.</td></tr>
-<tr><td><strong>Compaction rewrites your history</strong></td><td>The model stops reading what was said and starts reading a summary nobody reviewed. Anything you cannot lose goes somewhere that is never summarised.</td></tr>
-<tr><td><strong><code>LongRunningFunctionTool</code> + <code>ResumabilityConfig</code></strong></td><td>The run parks instead of blocking. Nothing loops, nothing burns tokens, and the process can die.</td></tr>
-<tr><td><strong>A session store outside the process</strong></td><td>The only reason a parked run can be resumed at all.</td></tr>
-<tr><td><strong><code>before_tool_callback</code></strong></td><td>A gate the call has to pass through, not a request you make of the model. Re-read the world in the instant before you act on it.</td></tr>
-<tr><td><strong>Idempotency keys</strong></td><td>Something you did not write will retry your purchase. The venue has to recognise the second one.</td></tr>
-<tr><td><strong><code>Workflow</code> graphs</strong></td><td>Steps that must not vary are functions. Steps that need judgement are agents. At 3am nobody notices a model being creative.</td></tr>
-<tr><td><strong><code>RequestInput</code> interrupts</strong></td><td>One mechanism for two kinds of waiting: a queue that is not ready, and a person who has not answered.</td></tr>
-<tr><td><strong><code>rerun_on_resume</code></strong></td><td>Which nodes redo themselves when woken. Get it wrong and every wake-up takes another queue ticket.</td></tr>
-<tr><td><strong>Bounded authority</strong></td><td>The number came from the person, they confirmed it, and it lives where the conversation cannot reach it.</td></tr>
-<tr><td><strong>Attendedness is per request</strong></td><td>The same deployed service serves a browser and a scheduler. Only one of them can answer a question.</td></tr>
-<tr><td><strong>Durable state</strong></td><td>A container&#x27;s filesystem dies with the container. Sessions, memory and artifacts all need somewhere that outlives it.</td></tr>
-</tbody>
-</table>
 <h3 is-upgraded>Building your own</h3>
 <p>Forget the concert tickets and keep the shape: <strong>a task that takes longer than a conversation, against a system you do not control.</strong> Look for it in restocking, claims, renewals, migrations, anything with a queue.</p>
 <p>Start your own from the prompt below. Fill in the four bracketed parts and give it to your coding assistant:</p>
@@ -1778,7 +1762,7 @@ after that works.</code></pre>
 <thead><tr><th>Symptom</th><th>Fix</th></tr></thead>
 <tbody>
 <tr><td><code>✗ Cannot access project</code></td><td>Wrong id. <code>rm ~/project_id.txt &amp;&amp; ./setup.sh</code></td></tr>
-<tr><td>Model returns 404</td><td><code>-latest</code> aliases are AI Studio only. Use <code>ADK_MODEL=gemini-2.5-flash</code></td></tr>
+<tr><td>Model returns 404</td><td><code>-latest</code> aliases are AI Studio only. Use <code>ADK_MODEL=gemini-latest-flash</code></td></tr>
 <tr><td><code>address already in use</code></td><td>Something already has port 8000 or 8090. <code>lsof -ti:8000 | xargs kill -9</code></td></tr>
 <tr><td>Agent can&#x27;t reach the venue</td><td><code>curl $VENUE_URL/health</code>, or <code>./deploy-venue.sh</code> again</td></tr>
 <tr><td>Queue never advances</td><td>Press <strong>SKIP THE WAIT</strong>. At 1× the queue will not reach the front on its own</td></tr>

@@ -196,7 +196,7 @@ chance it books **Tuesday**.
 
 ---
 
-## Step 7 · Staleness & Idempotency
+## Step 7 · Acting on Stale Data
 
 **Load** `step7_old_news`
 

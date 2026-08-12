@@ -1673,16 +1673,19 @@ ResumabilityConfig(is_resumable=True)         # the run may pause and be picked 
 
 ---
 
-## Staleness & Idempotency
+## Acting on Stale Data
 
-### Old Information and Double Purchases
+### Information goes out of date while you wait
 
-Long-running agents store history and past turns. But because time passes while the agent waits, the world changes outside it. This causes two big issues:
+Long-running agents store history, and history is not the same as truth. Time
+passes while the agent waits, and the world moves on without telling it.
 
-1. **Stale Data**: Facts from earlier in the chat (like seat availability or prices) go out of date. Instead of realizing its information is old, the agent acts with confidence on stale numbers.
-2. **Duplicate Actions**: If a process crashes or retries a payment, it might buy tickets twice unless the operation is safe to run multiple times (idempotent).
+An agent that is *missing* information asks you for it. An agent holding
+*out-of-date* information just acts, and sounds completely certain doing it.
+Nothing is missing from its context — the wrong thing is present.
 
-For long-running agents, timing matters: re-check dynamic facts immediately before acting, and make sure financial actions are safe to retry.
+So some facts have to be read again in the instant before they are used, and
+this step is about which ones and how.
 
 **Do not load new code yet.** Stay on the previous step's agent (it can buy tickets, but currently has no safeguards for staleness or idempotency).
 
@@ -1690,10 +1693,10 @@ For long-running agents, timing matters: re-check dynamic facts immediately befo
 the **+ New Session** button above the chat.
 
 Clear out the queue ticket and half-finished purchase the last step left in your
-old session. Both demos below depend on watching one clean run, so start from
+old session. The demo below depends on watching one clean run, so start from
 nothing.
 
-### Bug one: the snapshot lies
+### The snapshot lies
 
 👉✨ Ask for the same show as before:
 
@@ -1748,77 +1751,7 @@ Be clear about where the old information is stored: it persists in the **convers
 
 ![The seat map the agent is still working from](img/07-02-bug1.png)
 
-### Bug two: bought twice
-
-👉🔴 Press **RESET THE VENUE**, then **BREAK THE NEXT PURCHASE**.
-
-![The next purchase armed to commit, then fail](img/07-01-bug3.png)
-
-👉✨ Start another **new session** and run it again — same show, same steps:
-
-```
-Get us two tickets to the Amsterdam show.
-```
-
-As before, this only gets you a place in line. Nothing has been bought and nothing
-can fail yet: the agent is 14,203rd, and the venue rejects any purchase from
-someone who is not at the front.
-
-👉🔴 Press **SKIP THE WAIT**. The panel banner should now read *Agent is at the
-front of the queue*.
-
-👉✨ Now buy:
-
-```
-Buy two seats in section A.
-```
-
-The purchase fails:
-
-```
-{"error": "upstream_timeout", "status": 503, "message": "try again"}
-```
-
-```
-It looks like there was a problem processing the purchase and it timed out.
-Please try again.
-```
-
-👉 Look at the venue panel **before proceeding**. The panel shows **one order**.
-
-![One order recorded on the venue panel despite the timeout response](img/07-01-bug4.png)
-
-The purchase transaction succeeded on the backend, but the response timed out before returning to the client. From the client's perspective, an unacknowledged timeout is indistinguishable from a failed request.
-
-👉✨ Send a retry message:
-
-```
-Yes, try again.
-```
-
-```
-Great news! Your purchase for two seats in Section A for the Amsterdam show
-on November 14th was successful. The total cost is $420.
-```
-
-![The agent reports success after retrying](img/07-01-bug5.png)
-
-👉 The venue panel now displays:
-
-```
-Bought 2 times
-The retry went through again. This is the bug an idempotency key fixes.
-```
-
-![Two orders for one booking](img/07-01-bug6.png)
-
-Retrying non-idempotent operations without an idempotency key creates duplicate transactions. Sending an idempotency key allows the venue API to detect duplicate requests and return the original order.
-
-**Assume the venue cannot tell any of them apart.** So fix it with a key the venue recognises, not a setting on your side.
-
-![Committed, then the response failed](img/07-02-bug2.png)
-
-### Now fix both
+### The fix
 
 👉🔴 On the **venue panel**, press **RESET THE VENUE**. Every step starts from the same world: 8 shows, all seats available, clock at 1×.
 
@@ -1857,8 +1790,25 @@ root_agent = Agent(
 )
 ```
 
-Derive the key from the request itself, so a retry of the *same* purchase
-produces the *same* key:
+The second change is for a failure you have not seen yet, and will.
+
+**Something you did not write is going to retry your purchase.** The order
+commits, the response dies on the way back, and from where the agent stands a
+successful purchase and a failed one look identical. So it tries again. In the
+final step ADK's own Pub/Sub trigger does this for you
+(`ADK_TRIGGER_MAX_RETRIES`, default 3); elsewhere it is a load balancer, a queue,
+or a person clicking twice. ADK's `ResumabilityConfig` docstring says it plainly:
+
+> *"Tool call to resume needs to be idempotent because we only guarantee an
+> at-least-once behavior once resumed."*
+
+**At-least-once means more than once, sometimes.** You cannot stop the retry, so
+the venue has to be able to recognise it — and that means the second attempt has
+to arrive carrying something the first one had.
+
+Derive that key from the request itself, so a retry of the *same* purchase
+produces the *same* key, while a genuinely different purchase produces a
+different one:
 
 ```python
 # agent/concert/tools.py
@@ -1869,7 +1819,7 @@ key = hashlib.sha256(
 venue.post("/purchase", body, headers={"Idempotency-Key": key})
 ```
 
-### Prove both are fixed
+### Prove it
 
 👉🔴 **RESET THE VENUE**. Queue up, press **SELL THE GOOD SEATS** mid-wait, then tell it to buy section A.
 
@@ -1893,11 +1843,18 @@ agent  calling purchase
 
 That is the shape of the fix worth remembering. The agent still tried, and nothing stopped it from wanting to. The callback stopped the wanting from reaching the world, which is what an instruction could never do.
 
-👉🔴 **RESET**, then **BREAK THE NEXT PURCHASE**, and buy. Retry as many times as you like.
+👉🔴 Now prove the key works. Press **RESET THE VENUE**, then **BREAK THE NEXT
+PURCHASE** — that button makes the venue commit an order and then fail the
+response, which is exactly the situation a retry is born from.
+
+👉✨ Ask it to buy, and let it retry as many times as it likes.
 
 ![Still one order, however many times you retry](img/07-01-solution2.png)
 
-Check the order count. It stays at **1**.
+**Check the order count. It stays at 1.** The venue saw the same key twice and
+handed back the original order instead of writing a second one. Without the key
+you would be holding two pairs of tickets and an agent quite certain it bought
+one.
 
 <aside class="positive">
 <b>👀 Developer's Note:</b> ADK 2 also ships <code>runner.rewind_async(rewind_before_invocation_id=...)</code> to roll state back to before a bad decision.
@@ -2544,11 +2501,11 @@ agent, same venue — served by the production entrypoint this time.
 👉💻 And check the endpoint a scheduler would call actually exists:
 
 ```bash
-curl -s localhost:8092/openapi.json | grep -o '/apps/concert/trigger/pubsub'
+curl -s localhost:8092/openapi.json | grep -o '/trigger/wake'
 ```
 
 ```
-/apps/concert/trigger/pubsub
+/trigger/wake
 ```
 
 One app, two doors:
@@ -2678,9 +2635,18 @@ first of five steps:
 1. gcloud run deploy       the container: your agent, the graph, and the page
 2. a Pub/Sub topic         a queue for messages
 3. a service account       an identity, so the message is allowed in
-4. a push subscription     topic ──► /apps/concert/trigger/pubsub
+4. a push subscription     topic ──► /trigger/wake
 5. a Cloud Scheduler job   the alarm clock, on a cron
 ```
+
+<aside class="negative">
+<b>⚠️ ADK ships a trigger endpoint, and this workshop deliberately does not use it.</b> <code>trigger_sources=["pubsub"]</code> mounts <code>/apps/&lt;app&gt;/trigger/pubsub</code>, and its source says exactly what it does with a message:
+<pre>session_id = str(uuid.uuid4())               # a brand new session
+user_id    = subscription.replace("/", "--")  # and a different user</pre>
+That is right for <i>"fire an agent at something"</i>, where each message is independent work. It is wrong for <i>"go and finish the thing you started"</i>. A fresh session has no queue ticket, no agreed budget and no memory of the conversation, so the 3am run would not resume your booking — <b>it would start a second one and buy another pair of tickets.</b>
+<br><br>
+So <code>main.py</code> adds <code>/trigger/wake</code>, which lists the sessions for this user, finds the one that is parked on a question, and answers <i>that</i>. The scheduler pushes there instead. Same Pub/Sub, same retries, same timezone — a different idea about which conversation it belongs to.
+</aside>
 
 **Why a scheduler.** Go back to `clock.py` in step 3: sleep, then POST. It
 worked, and it dies with your terminal. Cloud Scheduler is the same idea run by
@@ -2711,14 +2677,14 @@ format, so the message arrives as an invocation.
 → agent    https://concert-you-xxxx.run.app
 → topic    presale-you created
 → iam      concert-trigger@your-project… may invoke concert-you
-→ push     → https://concert-you-xxxx.run.app/apps/concert/trigger/pubsub
+→ push     → https://concert-you-xxxx.run.app/trigger/wake
 → schedule 0 3 * * *
 ```
 
 <aside class="positive">
 <b>👀 Developer's Note — asking for this instead.</b> With the Google Cloud MCP server connected, the five steps above are one request:
 <br><br>
-<i>"Deploy the folder <code>agent/</code> to Cloud Run in project <code>&lt;my-project&gt;</code> as <code>concert-me</code>, unauthenticated, with these environment variables: … Then create a Pub/Sub topic <code>presale-me</code>, a service account that may invoke the service, a push subscription from the topic to <code>&lt;service-url&gt;/apps/concert/trigger/pubsub</code>, and a Cloud Scheduler job firing the topic at 03:00 UTC daily."</i>
+<i>"Deploy the folder <code>agent/</code> to Cloud Run in project <code>&lt;my-project&gt;</code> as <code>concert-me</code>, unauthenticated, with these environment variables: … Then create a Pub/Sub topic <code>presale-me</code>, a service account that may invoke the service, a push subscription from the topic to <code>&lt;service-url&gt;/trigger/wake</code>, and a Cloud Scheduler job firing the topic at 03:00 UTC daily."</i>
 <br><br>
 Read the plan before approving. The point of naming all five resources is that you can tell when one is missing.
 </aside>
@@ -2763,7 +2729,7 @@ Now look at the shape of what you just built:
   ONE deployed service, TWO kinds of caller
 
   your browser  ──► /wake                        somebody is plainly here
-  Cloud Sched.  ──► /apps/concert/trigger/pubsub nobody is
+  Cloud Sched.  ──► /trigger/wake                nobody is
 ```
 
 Notice both arrive at the same process. Ask a variable read once at boot to tell
@@ -2809,27 +2775,57 @@ the world, placed by a container you never logged into.
 
 ### Fire it the way 3am will
 
-👉🔴 Press **RESET THE VENUE** first, so the next order is unambiguous.
+The run is parked in the queue right now, which is exactly the state 3am finds it
+in. So be 3am.
 
-👉💻 Publish a message by hand, exactly as the scheduler will at 03:00:
+👉🔴 Press **SKIP THE WAIT** on the venue panel, so the queue is ready when the
+message arrives.
+
+👉💻 Publish to the topic, which is precisely what Cloud Scheduler does:
 
 ```bash
-gcloud scheduler jobs run presale-$(gcloud config get-value account | cut -d@ -f1) \
+gcloud pubsub topics publish presale-$(gcloud config get-value account | cut -d@ -f1) \
+  --message='The presale just opened.'
+```
+
+👉 **Now watch the browser, and do not touch it.** Within a few seconds the
+agent's reply appears on its own: it bought the tickets, at a price inside what
+you agreed, and told you so.
+
+Nobody typed. Scheduler published, Pub/Sub delivered, your endpoint found the
+session that was waiting, and the run finished.
+
+👉🔴 Check the venue panel. **One order, not two.**
+
+<aside class="positive">
+<b>👀 Developer's Note — why the page noticed.</b> A scheduled run finishes on the server, and nothing about that reaches an open browser on its own. So MonsterTix polls <code>/session/&lt;id&gt;/messages?since=&lt;timestamp&gt;</code> every four seconds and prints whatever is new. Unglamorous, and it survives the tab being closed overnight and reopened in the morning — which is the actual use case, and something a websocket would not have survived.
+</aside>
+
+<aside class="negative">
+<b>⚠️ If it books a second pair of tickets, check where your subscription is pushing.</b>
+<pre>gcloud pubsub subscriptions describe &lt;topic&gt;-push \
+  --format='value(pushConfig.pushEndpoint)'</pre>
+It must end in <code>/trigger/wake</code>. If it ends in <code>/apps/concert/trigger/pubsub</code> you are on ADK's built-in trigger, which starts a brand new session every fire — so it does not resume your booking, it starts another one. <code>deploy-agent.sh</code> updates an existing subscription, but a subscription created by hand earlier will keep whatever endpoint it was born with.
+</aside>
+
+**To run it on a real schedule**, the job has to be enabled — `jobs run` refuses on
+a paused one with `Job.state must be ENABLED`:
+
+```bash
+gcloud scheduler jobs resume presale-$(gcloud config get-value account | cut -d@ -f1) \
   --location=us-central1
 ```
 
-👉🔴 Watch the venue panel and press **SKIP THE WAIT** when a queue ticket appears.
-
-Watch the graph park at `check_front`, the same as on your laptop. Let the next
-scheduled fire wake it, and for a demo make the schedule impatient:
+And for a demo, make it impatient:
 
 ```bash
 gcloud scheduler jobs update pubsub presale-$(gcloud config get-value account | cut -d@ -f1) \
   --location=us-central1 --schedule="*/5 * * * *"
 ```
 
-**Check that nobody typed anything.** Scheduler published, Pub/Sub delivered, ADK
-routed it to the graph, and it ran.
+<aside class="negative">
+<b>⚠️ Pause it again when you are done.</b> An enabled job fires against your venue every night, or every five minutes if you set the impatient schedule above. <code>gcloud scheduler jobs pause &lt;job&gt; --location=us-central1</code>.
+</aside>
 
 ### Check the state is really durable
 

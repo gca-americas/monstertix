@@ -44,7 +44,7 @@ Each one adds a single idea, and each has complete working code in `solutions/`.
 | 4 | Managing Context Lifetime | four places a fact can live: `temp:`, session, `user:`, a file |
 | 5 | Context Degradation? | compaction rewrites history behind your back |
 | 6 | Process Resumption | `LongRunningFunctionTool` + `ResumabilityConfig` |
-| 7 | Staleness & Idempotency | `before_tool_callback`, and idempotency keys |
+| 7 | Acting on Stale Data | `before_tool_callback`, and idempotency keys |
 | 8 | Autonomous Workflow | `Workflow` graphs, and `RequestInput` interrupts |
 | 9 | Working With a Human | human-in-the-loop inside a graph |
 | 10 | The Cloud Stack | one Cloud Run service, Cloud SQL, Cloud Storage, Pub/Sub, Scheduler |

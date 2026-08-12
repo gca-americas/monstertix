@@ -1,4 +1,4 @@
-"""MODULE 5 — the same agent, running with nobody in the room.
+"""MODULE 5 — the graph, now inside the same budget.
 
 Nothing here replaces what you built. It surrounds it.
 
@@ -61,7 +61,7 @@ from google.adk.workflow.utils._workflow_hitl_utils import (
 from google.genai import types
 from pydantic import BaseModel
 
-from . import memory, venue
+from . import budget, memory, venue
 from .agent import buyer_agent
 from .config import MODEL
 from .memory import recall
@@ -69,11 +69,13 @@ from .tools import get_seatmap, search_events
 
 warnings.filterwarnings("ignore", message=r".*\[EXPERIMENTAL\].*")
 
-# Limits, as constants. This is the honest version of "the agent knows my
-# budget": somebody typed the numbers, and nobody was asked. Step 9 replaces
-# this block with a limit the person agrees to out loud and confirms.
-MAX_PRICE_PER_SEAT = 250
-SEATS = 2
+# A fallback for the very first unattended run, before anyone has agreed
+# anything. Once set_budget has been called the graph uses that instead — the
+# limit you agree in chat is the limit that runs tonight.
+# Only used if nobody has agreed anything yet. The moment set_budget has been
+# called the graph runs on THAT — what you confirmed in the chat is what gets
+# spent tonight, conditions and all.
+DEFAULT_BUDGET = "up to $250 per seat"
 
 
 class Plan(BaseModel):
@@ -90,18 +92,139 @@ class Plan(BaseModel):
 
 
 @node(rerun_on_resume=False)
-def open_the_night(node_input) -> Event:
-    """Give the picker something to answer.
+def open_the_night(node_input, ctx: Context) -> Event:
+    """Give the picker something to answer, and tell it what it may spend.
 
-    An agent node responds to its input. First in the graph with no user message
-    there is no input, and it waits forever — so the graph starts with the one
-    sentence a person would have said.
+    Two jobs. An agent node responds to its input, and first in the graph with no
+    user message there is nothing to respond to — so this says the sentence a
+    person would have said.
+
+    The other job is the budget. It is read from `user:` state, which is where
+    `set_budget` put it when somebody confirmed a number in conversation. That
+    is the join between the two halves of this module: the limit is agreed by a
+    person while they are awake, and spent by a graph while they are not.
     """
-    print("  [open]        3am. Nobody is awake.")
-    return Event(output="Choose tonight's show and section, and buy nothing yet.")
+    agreed = budget.load(ctx.state) or DEFAULT_BUDGET
+    asked = str(ctx.state.get("request") or "").strip()
+    print(f"  [open]        3am. Nobody is awake. Budget: {budget.describe(agreed)}")
+    if asked:
+        print(f"  [open]        they asked for: {asked[:70]}")
+    return Event(output=(
+        "Choose tonight's show and section, and buy nothing yet.\n\n"
+        f"What this person asked for, in their own words:\n\n"
+        f"    {asked or '(nothing said this time. Use what recall() tells you.)'}"
+        f"\n\nThe budget they agreed to, in their words:\n\n"
+        f"    {agreed}\n\n"
+        "Apply all of it, including any conditions about cities, days, how many "
+        "are coming, or which sections. If nothing on the tour fits, choose "
+        "nothing and say so."
+    ))
 
 
-# --- node 1: choose a show. Judgement, so an agent. -----------------------
+# --- node 1: agree a budget, in the graph, with a real human ---------------
+
+
+def what_they_asked_for(ctx) -> str:
+    """Everything this person typed, joined, in their own words.
+
+    The same argument `budget.py` makes about money applies to the rest of the
+    ask. The tempting design is fields — city, party_size, weekends_only — and it
+    breaks on the first sentence you did not anticipate ("I have 10 people coming
+    with me, but two of them might drop out"). So do not model it. Keep the text
+    and let the picker read it.
+
+    Only `text` parts count, which quietly does the right thing: answers to an
+    interrupt arrive as function_responses, so the budget conversation does not
+    get echoed back in here. What is left is what they freely said.
+    """
+    said = []
+    for event in (ctx.session.events or []):
+        if event.author != "user":
+            continue
+        for part in (event.content.parts if event.content else []) or []:
+            text = (getattr(part, "text", None) or "").strip()
+            if text and text not in said:
+                said.append(text)
+    return "\n".join(said)
+
+
+ASK_BUDGET = "budget:ask"
+CONFIRM_BUDGET = "budget:confirm"
+
+
+@node(rerun_on_resume=True)
+def agree_budget(node_input, ctx: Context):
+    """Stop the run and ask what they will spend. Read it back. Then store it.
+
+    Three things make this work, and you need all three:
+
+      @node(rerun_on_resume=True)
+          the node runs again each time the graph is woken, instead of being
+          skipped as already-done.
+
+      a STABLE interrupt_id
+          not the random one you get by default. It is the key you look the
+          answer up by, so it has to be the same string on the run that asks and
+          the run that reads.
+
+      ctx.resume_inputs[interrupt_id]
+          where the answer actually arrives. Not the return value of the
+          RequestInput — ADK iterates a node rather than sending into it, so
+          there is no value coming back that way.
+
+    Two interrupts, not one, and the second is the point. The first answer is
+    what somebody said. The second is what they agreed to.
+    """
+    answers = getattr(ctx, "resume_inputs", None) or {}
+
+    # Do this on every run, not just the first. The node reruns on resume, so a
+    # correction typed later ("actually there are only five of us now") is picked
+    # up here rather than lost.
+    ctx.state["request"] = what_they_asked_for(ctx)
+
+    if budget.load(ctx.state):
+        return Event(output=budget.load(ctx.state))
+
+    if not budget.someone_is_there():
+        # Nobody to ask. Run on what was agreed the last time somebody was
+        # awake, and if that is nothing, on the default — but never stop here,
+        # because stopping here means never buying anything.
+        print(f"  [agree_budget] unattended. Using: {DEFAULT_BUDGET}")
+        return Event(output=DEFAULT_BUDGET)
+
+    said = str(answers.get(ASK_BUDGET) or "").strip()
+    if not said:
+        print("  [agree_budget] nothing agreed yet. Asking.")
+        return RequestInput(
+            interrupt_id=ASK_BUDGET,
+            message=(
+                "Before I book anything: what are you willing to spend? Say it "
+                "however you like — a different price for the good seats, more "
+                "for a weekend, a total you will not go past."
+            ),
+        )
+
+    reply = str(answers.get(CONFIRM_BUDGET) or "").strip()
+    if not reply:
+        print(f"  [agree_budget] reading back: {said}")
+        return RequestInput(
+            interrupt_id=CONFIRM_BUDGET,
+            message=f"So: {said}. Have I got that right?",
+        )
+
+    if not reply.lower().lstrip().startswith(
+        ("yes", "yep", "correct", "that's right", "thats right", "confirmed", "right")
+    ):
+        # They corrected it rather than agreeing. Take the correction as the
+        # agreement — they have now said it twice and been shown it once.
+        said = reply
+
+    ctx.state["budget"] = said
+    print(f"  [agree_budget] agreed: {said}")
+    return Event(output=said)
+
+
+# --- node 2: choose a show. Judgement, so an agent. -----------------------
 
 picker = Agent(
     name="pick_show",
@@ -123,8 +246,23 @@ spend. Those preferences are the whole basis for the choice.
 Then search_events. Then get_seatmap for the show you settled on — do not ask
 whether to look at it, just look.
 
-Hard limits: {SEATS} seats, no more than ${MAX_PRICE_PER_SEAT} per seat, and the
-section must have {SEATS} seats available right now.
+The budget is in the message you were sent, written the way the person said it.
+Apply all of it — the prices, and any conditions about which sections or days.
+
+The largest amount they named anywhere in that sentence is a HARD CEILING. Check
+each section's price against it before you choose: if the price is higher than
+that number, that section is not an option, no matter how well it fits the rest
+of what they said. "$200 if they're the good ones" means a $210 seat is out.
+
+How many seats to buy is in that same message, in their words. "I have 10 people
+coming with me" is eleven seats, not ten and not two. If they never say, buy two.
+Whatever number you settle on, put it in `seats`, and the section must have that
+many available right now. If nothing is both available and under the ceiling,
+choose nothing.
+
+The city and the days are in there too. A person who says they live in New York
+and can only do weekends has ruled out every weekday show and every other city,
+even when a cheaper seat exists somewhere they cannot go.
 
 Return the plan. Put the reason in one sentence, in terms of what you know about
 this person — not "section A is the best seats".
@@ -162,6 +300,11 @@ def queue_up(node_input, ctx: Context) -> Event:
     """
     plan = Plan(**node_input)
     ticket = venue.post("/queue/join", {"event_id": plan.event_id})
+    if "ticket" not in ticket:
+        raise RuntimeError(
+            f"Failed to join queue for event {plan.event_id!r}: {ticket}. "
+            "Please ensure the venue is running and press 'RESET THE VENUE' on the control panel."
+        )
     ctx.state["queue_ticket"] = ticket["ticket"]
     ctx.state["queue_event_id"] = plan.event_id
     print(f"  [queue_up]    {plan.event_id} section {plan.section} — "
@@ -229,11 +372,11 @@ def brief(node_input, ctx: Context) -> Event:
         f"You are at the front of the queue for {plan.event_id} in {plan.city}. "
         f"The plan is {plan.seats} seats in section {plan.section}, chosen "
         f"because: {plan.reason}\n\n"
-        f"The limit is ${MAX_PRICE_PER_SEAT} a seat, which is a constant in this\n"
-        f"file because nobody agreed anything with anybody. Step 9 fixes that.\n\n"
+        f"The budget this person agreed to, in their words:\n\n"
+        f"    {budget.load(ctx.state) or DEFAULT_BUDGET}\n\n"
         "Buy them now. The seat map you are working from is forty minutes old, "
         "so read it again first — if that section has gone, take the best "
-        f"remaining one under ${MAX_PRICE_PER_SEAT} a seat. Then write me one "
+        "remaining one inside the same budget. Then write me one "
         "short message I will read over breakfast, saying what you got and what "
         "it cost. Prices are in US dollars."
     ))
@@ -246,7 +389,7 @@ def brief(node_input, ctx: Context) -> Event:
 nightly = Workflow(
     name="concert_nightly",
     description="The unattended presale run: judgement, rules, judgement.",
-    edges=[(START, open_the_night, pick_show, queue_up, check_front, brief, buyer_agent)],
+    edges=[(START, agree_budget, open_the_night, pick_show, queue_up, check_front, brief, buyer_agent)],
 )
 
 
