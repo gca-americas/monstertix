@@ -12,12 +12,14 @@ _root="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 # by creating a second empty sessions.db instead of erroring.
 export WORKSHOP="$_root"
 
+_shell_region="${GOOGLE_CLOUD_REGION:-}"
 # Your answers from ./setup.sh
 if [ -f "$_root/.env" ]; then
   set -a
   . "$_root/.env"
   set +a
 fi
+[ -n "$_shell_region" ] && export GOOGLE_CLOUD_REGION="$_shell_region"
 
 # The virtualenv, so `adk` and `python` are the right ones
 if [ -d "$_root/.venv" ]; then

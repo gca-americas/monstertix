@@ -147,7 +147,15 @@ LOCATION="${GOOGLE_CLOUD_LOCATION:-global}"
 if [ -n "${GOOGLE_CLOUD_REGION:-}" ]; then
   REGION="$GOOGLE_CLOUD_REGION"; REGION_SRC="from GOOGLE_CLOUD_REGION in your shell"
 else
-  REGION="us-central1";          REGION_SRC="default"
+  _gcloud_run_r=$(gcloud config get-value run/region 2>/dev/null || true)
+  _gcloud_comp_r=$(gcloud config get-value compute/region 2>/dev/null || true)
+  if [ -n "$_gcloud_run_r" ] && [ "$_gcloud_run_r" != "(unset)" ]; then
+    REGION="$_gcloud_run_r"; REGION_SRC="from gcloud run/region"
+  elif [ -n "$_gcloud_comp_r" ] && [ "$_gcloud_comp_r" != "(unset)" ]; then
+    REGION="$_gcloud_comp_r"; REGION_SRC="from gcloud compute/region"
+  else
+    REGION="us-central1"; REGION_SRC="default"
+  fi
 fi
 export GOOGLE_CLOUD_LOCATION="$LOCATION" GOOGLE_CLOUD_REGION="$REGION"
 
