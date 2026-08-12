@@ -2533,8 +2533,8 @@ a build.
 👉💻 **Terminal 2:**
 
 ```bash
-cd ~/monstertix
-. ./set_env.sh
+cd ~/monstertix/agent
+. ../set_env.sh
 uvicorn main:app --port 8092
 ```
 

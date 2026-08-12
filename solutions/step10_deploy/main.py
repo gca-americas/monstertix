@@ -42,6 +42,7 @@ import warnings
 warnings.filterwarnings("ignore", message=r".*\[EXPERIMENTAL\].*")
 
 from fastapi import Body                                          # noqa: E402
+from fastapi.middleware.cors import CORSMiddleware                # noqa: E402
 from fastapi.responses import FileResponse                        # noqa: E402
 from google.adk.cli.fast_api import get_fast_api_app              # noqa: E402
 from google.adk.cli.utils.service_factory import (                # noqa: E402
@@ -79,6 +80,14 @@ app = get_fast_api_app(
     session_service_uri=SESSION_URI,
     artifact_service_uri=ARTIFACT_URI,
     trigger_sources=["pubsub"],       # ← mounts /apps/<app>/trigger/pubsub
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # The same services, built from the same URIs, using ADK's own factories.
