@@ -80,6 +80,7 @@ app = get_fast_api_app(
     session_service_uri=SESSION_URI,
     artifact_service_uri=ARTIFACT_URI,
     trigger_sources=["pubsub"],       # ← mounts /apps/<app>/trigger/pubsub
+    allow_origins=["*"],
 )
 
 app.add_middleware(
