@@ -2578,6 +2578,7 @@ With the services ready, give the agent its permanent home.
 
 ```bash
 cd ~/monstertix
+. ./set_env.sh
 ./deploy-agent.sh
 ```
 
