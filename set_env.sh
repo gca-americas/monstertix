@@ -12,12 +12,29 @@ _root="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 # by creating a second empty sessions.db instead of erroring.
 export WORKSHOP="$_root"
 
+# What YOU set in this shell, captured before .env can overwrite it. `set -a`
+# below exports everything .env defines, and that used to clobber a deliberate
+# export you had just made — you would point VENUE_URL at a local venue, source
+# this, and silently go back to talking to Cloud Run.
+_SHELL_VENUE="${VENUE_URL:-}"
+_SHELL_PROJECT="${GOOGLE_CLOUD_PROJECT:-}"
+_SHELL_REGION="${GOOGLE_CLOUD_REGION:-}"
+_SHELL_LOCATION="${GOOGLE_CLOUD_LOCATION:-}"
+_SHELL_MODEL="${ADK_MODEL:-}"
+
 # Your answers from ./setup.sh (.env is loaded and exported)
 if [ -f "$_root/.env" ]; then
   set -a
   . "$_root/.env"
   set +a
 fi
+
+# The shell wins. An export you typed a minute ago beats a line .env remembers.
+[ -n "$_SHELL_VENUE" ]    && VENUE_URL="$_SHELL_VENUE"
+[ -n "$_SHELL_PROJECT" ]  && GOOGLE_CLOUD_PROJECT="$_SHELL_PROJECT"
+[ -n "$_SHELL_REGION" ]   && GOOGLE_CLOUD_REGION="$_SHELL_REGION"
+[ -n "$_SHELL_LOCATION" ] && GOOGLE_CLOUD_LOCATION="$_SHELL_LOCATION"
+[ -n "$_SHELL_MODEL" ]    && ADK_MODEL="$_SHELL_MODEL"
 
 # The virtualenv, so `adk` and `python` are the right ones
 if [ -d "$_root/.venv" ]; then

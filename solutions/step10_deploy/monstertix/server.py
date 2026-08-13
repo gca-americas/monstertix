@@ -182,7 +182,19 @@ if __name__ == "__main__":
     # graph has no model of its own — the model calls live in its agent nodes.
     kind = type(root_agent).__name__
     detail = getattr(root_agent, "model", None) or f"{kind} graph"
+    # Fail here, not on the first tool call. venue.py has no localhost fallback
+    # any more, so without this the server starts happily, the agent runs, and
+    # the purchase raises somewhere deep in a tool — which reads as "the agent
+    # is broken" rather than "this terminal never sourced set_env.sh".
+    if not os.environ.get("VENUE_URL"):
+        print("[server] ✗ VENUE_URL is not set, so there is no venue to buy from.",
+              flush=True)
+        print("[server]   In this terminal:  . ./set_env.sh", flush=True)
+        print("[server]   No venue yet?      ./deploy-venue.sh", flush=True)
+        raise SystemExit(1)
+
     print(f"[server] agent    {root_agent.name} · {detail}", flush=True)
+    print(f"[server] venue    {os.environ['VENUE_URL']}", flush=True)
     print(f"[server] sessions {SESSION_DESC}", flush=True)
     print(f"[server] memory   {type(memory_service).__name__ if memory_service else 'none'}", flush=True)
     print(f"[server] listening on http://127.0.0.1:{PORT}/wake", flush=True)
