@@ -57,34 +57,42 @@ if ! command -v gcloud >/dev/null 2>&1; then
 fi
 
 # --- which project? -------------------------------------------------------
-# Everyone brings their own. We ask once and remember the answer in $HOME,
-# which in Cloud Shell survives the idle timeout and a re-clone of this repo.
+# Everyone brings their own. We work out the most likely answer, then ALWAYS
+# show it and let you correct it. Never adopt one silently: a value can arrive
+# from a .env somebody copied, a shell export from another project, or a gcloud
+# config set months ago, and deploying a student's venue into a stranger's
+# project is not the kind of mistake that announces itself.
 #
-#   PROJECT_ID=x ./setup.sh   overrides and re-saves
-#   rm ~/project_id.txt       forget it and ask again
+#   PROJECT_ID=x ./setup.sh   skip the prompt entirely
+#   rm ~/project_id.txt       forget the remembered answer
 PROJECT_FILE="$HOME/project_id.txt"
 PROJECT=""
+SUGGESTED=""
+SOURCE=""
 
 if [ -n "${PROJECT_ID:-}" ]; then
+  # Explicitly passed on this command line. That IS the confirmation.
   PROJECT="$PROJECT_ID"
-elif [ -n "${GOOGLE_CLOUD_PROJECT:-}" ]; then
-  # Already set in this shell — somebody has configured their environment, so
-  # use it quietly rather than asking a question they have already answered.
-  PROJECT="$GOOGLE_CLOUD_PROJECT"
-  REMEMBERED=env
-elif [ -f "$PROJECT_FILE" ]; then
-  PROJECT=$(tr -d '[:space:]' < "$PROJECT_FILE")
-  [ -n "$PROJECT" ] && REMEMBERED=yes
-fi
-
-if [ -z "$PROJECT" ]; then
-  SUGGESTED=$(gcloud config get-value project 2>/dev/null)
-  [ "$SUGGESTED" = "(unset)" ] && SUGGESTED=""
+  SOURCE="PROJECT_ID on the command line"
+else
+  if [ -f "$PROJECT_FILE" ]; then
+    SUGGESTED=$(tr -d '[:space:]' < "$PROJECT_FILE")
+    [ -n "$SUGGESTED" ] && SOURCE="remembered in $PROJECT_FILE"
+  fi
+  if [ -z "$SUGGESTED" ] && [ -n "${GOOGLE_CLOUD_PROJECT:-}" ]; then
+    SUGGESTED="$GOOGLE_CLOUD_PROJECT"
+    SOURCE="GOOGLE_CLOUD_PROJECT in your environment"
+  fi
+  if [ -z "$SUGGESTED" ]; then
+    SUGGESTED=$(gcloud config get-value project 2>/dev/null)
+    case "$SUGGESTED" in ""|"(unset)") SUGGESTED="" ;; *) SOURCE="your gcloud config" ;; esac
+  fi
 
   if [ ! -t 0 ]; then
     # No terminal to ask on — CI, or a piped run.
     if [ -n "$SUGGESTED" ]; then
       PROJECT="$SUGGESTED"
+      echo "→ project    $PROJECT  ($SOURCE, not confirmed — no terminal)"
     else
       echo "✗ No project id. Run interactively, or:  PROJECT_ID=your-project ./setup.sh"
       exit 1
@@ -92,6 +100,8 @@ if [ -z "$PROJECT" ]; then
   else
     echo ""
     echo "  Which Google Cloud project should this workshop use?"
+    echo "  Everything gets deployed into it, so check this is the one you mean."
+    [ -n "$SUGGESTED" ] && echo "  Suggested: $SUGGESTED  ($SOURCE)"
     echo "  Find yours at https://console.cloud.google.com  (top-left picker)"
     echo ""
     while [ -z "$PROJECT" ]; do
@@ -122,13 +132,7 @@ fi
 
 printf '%s\n' "$PROJECT" > "$PROJECT_FILE"
 gcloud config set project "$PROJECT" >/dev/null 2>&1
-if [ "${REMEMBERED:-}" = "env" ]; then
-  echo "→ project    $PROJECT  (from GOOGLE_CLOUD_PROJECT in your shell)"
-elif [ "${REMEMBERED:-}" = "yes" ]; then
-  echo "→ project    $PROJECT  (remembered — rm $PROJECT_FILE to change)"
-else
-  echo "→ project    $PROJECT  (saved to $PROJECT_FILE)"
-fi
+echo "→ project    $PROJECT  (saved to $PROJECT_FILE — rm it to be asked again)"
 
 # Location and region: use whatever is already set, and only fall back if it is
 # not. Somebody with GOOGLE_CLOUD_LOCATION exported has told us where they work,

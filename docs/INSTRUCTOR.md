@@ -49,9 +49,9 @@ Options, in order of preference:
 ```
 [ ] publish the repo, public, no auth
 [ ] ./setup.sh from a clean clone on the students' project
-[ ] deploy the Module 6 path: adk deploy cloud_run, Pub/Sub topic + push
-    subscription → /apps/concert/trigger/pubsub, Cloud Scheduler job
-[ ] RUN MODULE 6 FOR REAL AT 3AM so Cloud Trace has an ingested trace with a
+[ ] deploy the step 10 path: ./deploy-agent.sh, Pub/Sub topic + push
+    subscription → /trigger/wake, Cloud Scheduler job
+[ ] RUN STEP 10 FOR REAL AT 3AM so Cloud Trace has an ingested trace with a
     genuine forty-minute gap in it
 [ ] rehearse M3 and M5 at least — see "what actually breaks"
 [ ] charge a jar of sourdough discard for the coda, if you're doing it

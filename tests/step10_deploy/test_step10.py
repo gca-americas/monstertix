@@ -36,8 +36,10 @@ def test_server_mounts_a_pubsub_trigger():
         del sys.modules[name]
     import main
     paths = [r.path for r in main.app.routes]
-    assert any("trigger/pubsub" in p for p in paths), \
-        "no trigger endpoint means Cloud Scheduler has nothing to call"
+    assert any("/trigger/wake" in p for p in paths), \
+        "no /trigger/wake means the scheduler cannot resume a parked session"
+    assert any("/session/{session_id}/messages" in p for p in paths), \
+        "without this the page never learns that a scheduled run finished"
 
 
 def test_unattended_skips_the_question():

@@ -298,8 +298,9 @@ cd ~/longrunningag
 ```
 
 **Check**
-- [ ] `adk deploy cloud_run` finishes and prints a URL
-- [ ] the push subscription points at `/apps/concert/trigger/pubsub`
+- [ ] `./deploy-agent.sh` finishes and prints a URL
+- [ ] the push subscription points at `/trigger/wake`  (NOT `/apps/concert/trigger/pubsub`,
+      which starts a fresh session and books a second pair of tickets)
 - [ ] the Scheduler job exists
 
 Fire it: `gcloud scheduler jobs run presale-<you> --location=us-central1`
