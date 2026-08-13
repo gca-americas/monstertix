@@ -4,7 +4,9 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
+_shell_region="${GOOGLE_CLOUD_REGION:-}"
 [ -f .env ] && set -a && . ./.env && set +a
+[ -n "$_shell_region" ] && export GOOGLE_CLOUD_REGION="$_shell_region"
 
 PROJECT="${GOOGLE_CLOUD_PROJECT:?set GOOGLE_CLOUD_PROJECT}"
 REGION="${AGENT_REGION:-${GOOGLE_CLOUD_REGION:-us-central1}}"
