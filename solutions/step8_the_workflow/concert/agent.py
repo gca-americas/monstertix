@@ -28,6 +28,8 @@ from __future__ import annotations
 
 from google.adk.agents import Agent
 from google.adk.apps.app import App, EventsCompactionConfig, ResumabilityConfig
+from google.adk.apps.llm_event_summarizer import LlmEventSummarizer
+from google.adk.models.google_llm import Gemini
 from google.adk.tools.agent_tool import AgentTool
 
 from .config import MODEL
@@ -127,6 +129,11 @@ app = App(
     events_compaction_config=EventsCompactionConfig(
         compaction_interval=3,
         overlap_size=1,
+        # Required once the root is a Workflow. ADK normally borrows the
+        # summariser's model from the root agent, and a graph has no model —
+        # `No LlmAgent model available for event compaction summarizer.` So
+        # name one explicitly.
+        summarizer=LlmEventSummarizer(llm=Gemini(model=MODEL)),
     ),
     resumability_config=ResumabilityConfig(is_resumable=True),
 )
