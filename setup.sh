@@ -33,11 +33,24 @@ else
 fi
 
 # --- 3. Config ------------------------------------------------------------
+# What YOU set in this shell, captured before .env can overwrite it. Sourcing
+# .env below is how the workshop remembers your answers, and it must not be how
+# a stale saved value beats a deliberate export you just made.
+_SHELL_PROJECT="${GOOGLE_CLOUD_PROJECT:-}"
+_SHELL_REGION="${GOOGLE_CLOUD_REGION:-}"
+_SHELL_LOCATION="${GOOGLE_CLOUD_LOCATION:-}"
+
 if [ ! -f .env ]; then
   cp .env.example .env
   echo "→ created .env"
 fi
 [ -f .env ] && set -a && . ./.env && set +a
+
+# The shell wins. An export you typed a minute ago is a clearer statement of
+# intent than a line written into .env by a run last week.
+[ -n "$_SHELL_PROJECT" ]  && GOOGLE_CLOUD_PROJECT="$_SHELL_PROJECT"
+[ -n "$_SHELL_REGION" ]   && GOOGLE_CLOUD_REGION="$_SHELL_REGION"
+[ -n "$_SHELL_LOCATION" ] && GOOGLE_CLOUD_LOCATION="$_SHELL_LOCATION"
 
 mkdir -p artifacts memory
 # The agent APPENDS to this file every time it calls remember(), so after a few
@@ -150,7 +163,9 @@ LOCATION="${GOOGLE_CLOUD_LOCATION:-global}"
 # student's venue to a region they picked months ago for something else is the
 # kind of thing nobody notices until the URLs do not match the codelab.
 if [ -n "${GOOGLE_CLOUD_REGION:-}" ]; then
-  REGION="$GOOGLE_CLOUD_REGION"; REGION_SRC="from GOOGLE_CLOUD_REGION in your shell"
+  REGION="$GOOGLE_CLOUD_REGION"
+  if [ -n "$_SHELL_REGION" ]; then REGION_SRC="from GOOGLE_CLOUD_REGION in your shell"
+  else REGION_SRC="from .env"; fi
 else
   _gcloud_run_r=$(gcloud config get-value run/region 2>/dev/null || true)
   _gcloud_comp_r=$(gcloud config get-value compute/region 2>/dev/null || true)
