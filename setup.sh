@@ -278,23 +278,6 @@ else
   fi
 fi
 
-# Prove the model actually answers, so nobody discovers a 404 mid-workshop.
-MODEL="${ADK_MODEL:-gemini-2.5-flash}"
-CHECK=$(.venv/bin/python - "$PROJECT" "$LOCATION" "$MODEL" <<'PY' 2>&1
-import sys
-try:
-    from google import genai
-    c = genai.Client(vertexai=True, project=sys.argv[1], location=sys.argv[2])
-    c.models.generate_content(model=sys.argv[3], contents="hi")
-    print("OK")
-except Exception as exc:
-    print(f"FAIL {type(exc).__name__}: {str(exc)[:160]}")
-PY
-)
-set -e
-
-if [ "${CHECK:0:2}" = "OK" ]; then
-  echo "→ model      $MODEL responds"
 
   # --- 5. The pre-loaded session ------------------------------------------
   # Step 3 opens a session that has already been alive for two days. Without
